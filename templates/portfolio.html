@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block title %}Portfolio allocation{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-6">
+    <div>
+        <a href="/" class="text-xs text-ink-dim hover:text-ink mono">← back to dashboard</a>
+        <h1 class="text-3xl font-bold headline tracking-tight mt-1">Portfolio allocation</h1>
+        <p class="text-ink-muted text-sm">
+            Hierarchical Risk Parity across today's TAKE-LONG setups.
+            <span class="text-ink-dim">{{ today }}</span>
+        </p>
+    </div>
+    <div class="flex items-center gap-2">
+        <label class="text-[10px] uppercase tracking-widest text-ink-dim mono">Cap picks at</label>
+        <select id="limit-select"
+                class="px-3 py-1.5 bg-bg-sub border border-border rounded-lg text-sm mono">
+            <option value="4">4</option>
+            <option value="6">6</option>
+            <option value="8" selected>8</option>
+            <option value="12">12</option>
+            <option value="20">20</option>
+        </select>
+        <button id="reload-btn"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold border border-border text-ink-muted hover:text-ink hover:bg-bg-hover">
+            ⟳ Recompute
+        </button>
+    </div>
+</div>
+
+{# ============================================================== #}
+{#  No setups yet                                                    #}
+{# ============================================================== #}
+{% if take_symbols|length < 2 %}
+<div class="surface p-8 text-center grid-bg">
+    <div class="text-4xl mb-3">📐</div>
+    <div class="text-ink font-semibold mb-1">
+        Need at least 2 setups to allocate a portfolio.
+    </div>
+    <div class="text-ink-dim text-sm mb-4">
+        You have {{ take_symbols|length }} TAKE-LONG pick{% if take_symbols|length != 1 %}s{% endif %} today.
+        Run a scan or wait for the market to give more signals.
+    </div>
+    <a href="/scan" class="inline-block px-5 py-2.5 rounded-lg text-white font-bold text-sm"
+       style="background: linear-gradient(135deg, #22d38a 0%, #5b9df9 100%);">
+        ▶ Run Scan
+    </a>
+</div>
+{% else %}
+
+{# Explanation card #}
+<div class="surface p-5 mb-6">
+    <div class="flex items-start gap-3">
+        <span class="w-9 h-9 rounded-md bg-accent-purple/15 text-accent-purple flex items-center justify-center text-lg shrink-0">📐</span>
+        <div>
+            <div class="text-sm font-bold text-ink mb-1">What HRP is doing</div>
+            <p class="text-sm text-ink-muted leading-relaxed">
+                Hierarchical Risk Parity balances your capital across setups based on how their
+                returns co-move over the last 60 days. Two names that ride the same sector wave
+                share one "bucket" of risk, so a single sector move can't sink all positions.
+                Compare the HRP column with equal weight to see which names HRP considers
+                redundant.
+            </p>
+        </div>
+    </div>
+</div>
+
+{# Loading state #}
+<div id="loading" class="surface p-8 text-center grid-bg">
+    <div class="inline-flex items-center gap-2 text-ink-muted mono text-sm">
+        <div class="w-2 h-2 bg-accent-blue rounded-full pulse-live"></div>
+        Fetching 60-day returns and running HRP...
+    </div>
+</div>
+
+{# Error state #}
+<div id="error-box" class="hidden mb-4 p-3 rounded-lg bg-accent-red/15 border border-accent-red/40 text-accent-red text-sm"></div>
+
+{# Warning banner #}
+<div id="warning-box" class="hidden mb-4 p-3 rounded-lg bg-accent-yellow/10 border border-accent-yellow/30 text-sm flex items-start gap-3">
+    <span class="text-accent-yellow text-lg leading-none">ⓘ</span>
+    <div class="flex-1 text-ink-muted" id="warning-text"></div>
+</div>
+
+{# Result container #}
+<div id="result" class="hidden">
+
+    {# Stats row #}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="surface p-5">
+            <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Capital deployed</div>
+            <div class="text-3xl font-bold mono text-ink" id="stat-capital">—</div>
+            <div class="text-xs text-ink-dim mt-1">across <span id="stat-count">—</span> picks</div>
+        </div>
+        <div class="surface p-5">
+            <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Concentration ratio</div>
+            <div class="text-3xl font-bold mono text-accent-yellow" id="stat-conc">—</div>
+            <div class="text-xs text-ink-dim mt-1" id="stat-conc-note">largest single position</div>
+        </div>
+        <div class="surface p-5">
+            <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Diversification</div>
+            <div class="text-3xl font-bold mono text-accent-green" id="stat-div">—</div>
+            <div class="text-xs text-ink-dim mt-1" id="stat-div-note">effective independent bets</div>
+        </div>
+    </div>
+
+    {# Allocation table #}
+    <div class="surface overflow-hidden mb-6">
+        <div class="px-5 pt-5 pb-3 flex items-center justify-between">
+            <div>
+                <h2 class="text-lg font-bold">Allocation</h2>
+                <p class="text-xs text-ink-dim mono mt-0.5">
+                    Sorted by HRP weight · <span id="bars-used">—</span> bars of history
+                </p>
+            </div>
+        </div>
+        <table class="w-full text-sm">
+            <thead class="text-[10px] uppercase tracking-widest text-ink-dim mono">
+                <tr class="border-b border-border">
+                    <th class="text-left px-5 py-3">Symbol</th>
+                    <th class="text-left px-5 py-3 hidden md:table-cell">Sector</th>
+                    <th class="text-right px-5 py-3">HRP %</th>
+                    <th class="text-right px-5 py-3">HRP ₹</th>
+                    <th class="text-right px-5 py-3">Equal ₹</th>
+                    <th class="text-right px-5 py-3">Delta</th>
+                </tr>
+            </thead>
+            <tbody id="alloc-tbody"></tbody>
+        </table>
+    </div>
+
+    {# Correlation heatmap #}
+    <div class="surface p-5">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="text-lg font-bold">Correlation heatmap</h2>
+                <p class="text-xs text-ink-dim mono mt-0.5">
+                    Daily-return correlations — red is co-moving, green is anti-correlated.
+                </p>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] mono text-ink-dim">
+                <span class="inline-block w-3 h-3 rounded-sm" style="background:#22d38a"></span> -1
+                <span class="inline-block w-3 h-3 rounded-sm bg-bg-sub border border-border"></span> 0
+                <span class="inline-block w-3 h-3 rounded-sm" style="background:#ff5b6f"></span> +1
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <canvas id="corr-canvas" class="max-w-full"></canvas>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const LIMIT_SELECT = document.getElementById('limit-select');
+const RELOAD_BTN = document.getElementById('reload-btn');
+const LOADING = document.getElementById('loading');
+const RESULT = document.getElementById('result');
+const ERROR_BOX = document.getElementById('error-box');
+const WARN_BOX = document.getElementById('warning-box');
+const WARN_TEXT = document.getElementById('warning-text');
+
+function fmtInr(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    return '₹' + Math.round(n).toLocaleString('en-IN');
+}
+function fmtPct(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    return (n * 100).toFixed(1) + '%';
+}
+
+async function loadAllocation() {
+    if (!LOADING) return;
+    LOADING.classList.remove('hidden');
+    RESULT.classList.add('hidden');
+    ERROR_BOX.classList.add('hidden');
+    WARN_BOX.classList.add('hidden');
+
+    const limit = LIMIT_SELECT ? LIMIT_SELECT.value : 8;
+    try {
+        const res = await fetch(`/api/portfolio/allocate?limit=${limit}`);
+        const data = await res.json();
+        if (!res.ok) {
+            ERROR_BOX.textContent = data.error || 'Failed to compute allocation.';
+            ERROR_BOX.classList.remove('hidden');
+            LOADING.classList.add('hidden');
+            return;
+        }
+        renderAllocation(data);
+    } catch (err) {
+        ERROR_BOX.textContent = 'Network error: ' + err.message;
+        ERROR_BOX.classList.remove('hidden');
+    } finally {
+        LOADING.classList.add('hidden');
+    }
+}
+
+function renderAllocation(data) {
+    RESULT.classList.remove('hidden');
+
+    if (data.warning) {
+        WARN_TEXT.textContent = data.warning;
+        WARN_BOX.classList.remove('hidden');
+    }
+
+    const capital = Number(data.capital) || 0;
+    const hrpAmounts = data.hrp_amounts || {};
+    const eqAmounts = data.equal_amounts || {};
+    const hrpWeights = data.hrp_weights || {};
+    const sectors = data.sectors || {};
+    const symbols = Object.keys(hrpAmounts).length ? Object.keys(hrpAmounts) : Object.keys(eqAmounts);
+
+    // Stats
+    document.getElementById('stat-capital').textContent = fmtInr(capital);
+    document.getElementById('stat-count').textContent = symbols.length;
+
+    const conc = data.concentration_ratio;
+    if (conc !== null && conc !== undefined) {
+        document.getElementById('stat-conc').textContent = (conc * 100).toFixed(1) + '%';
+        document.getElementById('stat-conc-note').textContent =
+            `Max position is ${(conc * 100).toFixed(1)}% of capital (vs ${(100 / symbols.length).toFixed(1)}% at equal weight).`;
+    } else {
+        document.getElementById('stat-conc').textContent = '—';
+    }
+
+    const div = data.diversification_ratio;
+    if (div !== null && div !== undefined) {
+        // 1 / (1 - div) approximates effective N of independent bets
+        const effN = div >= 0.999 ? symbols.length : (1 / (1 - div)).toFixed(1);
+        document.getElementById('stat-div').textContent = div.toFixed(2);
+        document.getElementById('stat-div-note').textContent =
+            `Effective diversification: ~${effN} independent bets out of ${symbols.length} picks.`;
+    } else {
+        document.getElementById('stat-div').textContent = '—';
+    }
+
+    document.getElementById('bars-used').textContent = data.bars_used || 0;
+
+    // Table — sort rows by HRP weight desc, fall back to equal amount
+    const rows = symbols.map(sym => ({
+        sym,
+        hrp_w: hrpWeights[sym] || 0,
+        hrp_a: hrpAmounts[sym] || 0,
+        eq_a: eqAmounts[sym] || 0,
+        sector: sectors[sym] || null,
+    }));
+    rows.sort((a, b) => (b.hrp_w - a.hrp_w) || (b.hrp_a - a.hrp_a));
+
+    const tbody = document.getElementById('alloc-tbody');
+    tbody.innerHTML = '';
+    for (const row of rows) {
+        const delta = row.hrp_a - row.eq_a;
+        const deltaColor = delta > 0 ? 'text-accent-green' : (delta < 0 ? 'text-accent-red' : 'text-ink-dim');
+        const deltaSign = delta > 0 ? '+' : '';
+        const barPct = Math.min(100, row.hrp_w * 100);
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-border hover:bg-bg-hover';
+        tr.innerHTML = `
+            <td class="px-5 py-3">
+                <a href="/stock/${row.sym}" class="font-semibold text-ink hover:text-accent-blue">${row.sym}</a>
+            </td>
+            <td class="px-5 py-3 hidden md:table-cell text-xs text-ink-muted mono">${row.sector || '—'}</td>
+            <td class="px-5 py-3 text-right mono">
+                <div class="flex items-center justify-end gap-2">
+                    <div class="w-16 h-1.5 bg-bg-sub rounded-full overflow-hidden">
+                        <div class="h-full bg-accent-purple rounded-full" style="width:${barPct.toFixed(1)}%"></div>
+                    </div>
+                    <span class="font-bold text-ink">${(row.hrp_w * 100).toFixed(1)}%</span>
+                </div>
+            </td>
+            <td class="px-5 py-3 text-right mono font-bold text-ink">${fmtInr(row.hrp_a)}</td>
+            <td class="px-5 py-3 text-right mono text-ink-muted">${fmtInr(row.eq_a)}</td>
+            <td class="px-5 py-3 text-right mono ${deltaColor} font-semibold">${deltaSign}${fmtInr(delta).replace('₹','₹')}</td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    // Correlation heatmap
+    drawHeatmap(data.correlation_labels || [], data.correlation_matrix || []);
+}
+
+function corrColor(v) {
+    // v in [-1, 1]. Green (-) → dim (0) → red (+)
+    if (v === null || v === undefined || isNaN(v)) return '#131a2d';
+    const t = Math.max(-1, Math.min(1, v));
+    if (t >= 0) {
+        // 0 -> transparent-ish, 1 -> red
+        const alpha = 0.15 + 0.75 * t;
+        return `rgba(255, 91, 111, ${alpha.toFixed(3)})`;
+    } else {
+        const alpha = 0.15 + 0.75 * (-t);
+        return `rgba(34, 211, 138, ${alpha.toFixed(3)})`;
+    }
+}
+
+function drawHeatmap(labels, matrix) {
+    const canvas = document.getElementById('corr-canvas');
+    if (!canvas || !labels.length) return;
+    const n = labels.length;
+    const dpr = window.devicePixelRatio || 1;
+
+    // Label gutter + cell dimensions
+    const gutterX = 100;   // left label column
+    const gutterY = 60;    // top label row
+    const cell = Math.max(38, Math.min(72, Math.floor((canvas.parentElement.clientWidth - gutterX - 20) / n)));
+    const w = gutterX + cell * n + 10;
+    const h = gutterY + cell * n + 10;
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.font = '11px "JetBrains Mono", ui-monospace, monospace';
+    ctx.textBaseline = 'middle';
+
+    // Top labels (rotated)
+    for (let j = 0; j < n; j++) {
+        ctx.save();
+        ctx.translate(gutterX + j * cell + cell / 2, gutterY - 8);
+        ctx.rotate(-Math.PI / 4);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8a95b0';
+        ctx.fillText(labels[j], 0, 0);
+        ctx.restore();
+    }
+
+    // Left labels
+    ctx.textAlign = 'right';
+    for (let i = 0; i < n; i++) {
+        ctx.fillStyle = '#8a95b0';
+        ctx.fillText(labels[i], gutterX - 8, gutterY + i * cell + cell / 2);
+    }
+
+    // Cells + values
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            const x = gutterX + j * cell;
+            const y = gutterY + i * cell;
+            const v = matrix[i] && matrix[i][j];
+            ctx.fillStyle = corrColor(v);
+            ctx.fillRect(x, y, cell - 1, cell - 1);
+            ctx.strokeStyle = '#1e2740';
+            ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
+
+            // Text — white on strong colors, dim on weak
+            const abs = Math.abs(v || 0);
+            ctx.fillStyle = abs > 0.4 ? '#ffffff' : '#8a95b0';
+            ctx.textAlign = 'center';
+            const label = (v === null || v === undefined || isNaN(v)) ? '—' : v.toFixed(2);
+            ctx.fillText(label, x + cell / 2, y + cell / 2);
+        }
+    }
+}
+
+if (RELOAD_BTN) RELOAD_BTN.addEventListener('click', loadAllocation);
+if (LIMIT_SELECT) LIMIT_SELECT.addEventListener('change', loadAllocation);
+
+// Kick off on load if there are enough picks (i.e., loading element exists)
+if (LOADING) loadAllocation();
+</script>
+{% endblock %}

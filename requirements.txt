@@ -1,0 +1,28 @@
+# ===========================================================================
+#  advisor - dependencies
+#  The core math runs on pandas + numpy alone. Everything else is optional and
+#  the tool degrades gracefully if a package is missing.
+# ===========================================================================
+
+# --- required --------------------------------------------------------------
+pandas>=2.0
+numpy>=1.24
+yfinance>=0.2.40          # free NSE/BSE market data  (RELIANCE.NS, TCS.BO, ...)
+
+# --- web interface (run `python webapp.py` for the dashboard) --------------
+flask>=3.0
+
+# --- RL agent (run `python rl_agent.py train` to train PPO on NSE stocks) --
+stable-baselines3>=2.0
+gymnasium>=0.29
+
+# --- optional (install for extra features) ---------------------------------
+PyYAML>=6.0               # to use config.yaml (else built-in defaults apply)
+feedparser>=6.0           # the `news` command (RSS headlines + sentiment)
+pytest>=7.0               # to run the test-suite in tests/
+
+# --- optional speed-up (NOT required - we ship pure-pandas indicators) ------
+# pandas-ta-classic>=0.3.0
+
+# --- optional, only if you use a cloud LLM for narration -------------------
+# (no SDKs needed - the tool calls Ollama/Groq/Gemini over plain HTTP)

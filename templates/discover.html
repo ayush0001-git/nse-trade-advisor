@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Discover Stocks{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold mb-2">🔍 Discover Stocks</h1>
+    <p class="text-slate-400">Find stocks by type (large/mid/small cap) — every recommendation comes with a full explanation of why to buy (or not).</p>
+</div>
+
+<!-- Cap type selector -->
+<div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-6">
+    <label class="text-xs text-slate-400 uppercase mb-3 block">Select Stock Type</label>
+    <div class="flex flex-wrap gap-3">
+        <button onclick="discover('large')" id="btn-large" class="px-5 py-2.5 bg-accent-blue hover:bg-blue-600 text-white rounded-lg font-medium text-sm">
+            💼 Large Cap (NIFTY 50)
+        </button>
+        <button onclick="discover('mid')" id="btn-mid" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium text-sm">
+            📊 Mid Cap (NIFTY 200)
+        </button>
+        <button onclick="discover('small')" id="btn-small" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium text-sm">
+            🔥 Small Cap (Growth)
+        </button>
+        <button onclick="discover('all')" id="btn-all" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium text-sm">
+            🌟 All Types (Mixed)
+        </button>
+    </div>
+    <p class="text-xs text-slate-500 mt-3">The system analyzes each stock across all 6 intelligence layers (Technical, News, Sentiment, Institutional, Options, Fundamentals) and ranks them by the 100-point score.</p>
+</div>
+
+<!-- Loading -->
+<div id="loading" class="hidden text-center py-12">
+    <div class="inline-block animate-pulse text-accent-blue text-lg mb-2">🔍 Analyzing stocks across 6 intelligence layers...</div>
+    <div class="text-sm text-slate-400" id="loading-status">This takes 2-5 minutes (each stock runs 5 agents)</div>
+</div>
+
+<!-- Results -->
+<div id="results" class="hidden">
+    <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-2xl font-bold" id="results-title">Top Stocks</h2>
+        <span class="text-sm text-slate-400" id="results-count"></span>
+    </div>
+    <div id="stocks-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8"></div>
+
+    <!-- Explanation panel -->
+    <div id="explanation-panel" class="hidden bg-bg-card rounded-xl border border-slate-700 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold" id="explain-symbol">—</h2>
+            <button onclick="document.getElementById('explanation-panel').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <div id="explain-content" class="prose prose-invert max-w-none text-sm text-slate-300"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentCapType = null;
+let pollTimer = null;
+
+const CAP_LABELS = {large: 'Large Cap', mid: 'Mid Cap', small: 'Small Cap', all: 'All Types'};
+
+async function discover(capType) {
+    currentCapType = capType;
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+
+    // Update button styles
+    ['large', 'mid', 'small', 'all'].forEach(t => {
+        const btn = document.getElementById(`btn-${t}`);
+        if (t === capType) {
+            btn.className = 'px-5 py-2.5 bg-accent-blue hover:bg-blue-600 text-white rounded-lg font-medium text-sm';
+        } else {
+            btn.className = 'px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium text-sm';
+        }
+    });
+
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+    loading.classList.remove('hidden');
+    results.classList.add('hidden');
+
+    document.getElementById('loading-status').textContent = `Checking for today's ${CAP_LABELS[capType]} results...`;
+
+    try {
+        // Today's results are cached server-side — serve them instantly if present.
+        const res = await fetch(`/api/discover/${capType}`);
+        if (res.status === 200) {
+            renderResults(await res.json(), capType);
+            return;
+        }
+
+        // No cache yet: kick off the background run and poll for progress.
+        await fetch(`/api/discover/start?cap_type=${capType}`, {method: 'POST'});
+        document.getElementById('loading-status').textContent = `Analyzing ${CAP_LABELS[capType]} stocks... (2-5 min)`;
+        pollTimer = setInterval(() => pollDiscover(capType), 3000);
+    } catch (e) {
+        loading.classList.add('hidden');
+        alert('Error: ' + e.message);
+    }
+}
+
+async function pollDiscover(capType) {
+    if (currentCapType !== capType) {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        return;
+    }
+    try {
+        const st = await (await fetch('/api/discover/status')).json();
+        if (st.running) {
+            document.getElementById('loading-status').textContent =
+                `Analyzing ${CAP_LABELS[capType]} stocks... ${st.progress}/${st.total} (${st.current_symbol || '...'})`;
+            return;
+        }
+        clearInterval(pollTimer); pollTimer = null;
+        if (st.error) throw new Error(st.error);
+
+        const res = await fetch(`/api/discover/${capType}`);
+        if (res.status === 200) {
+            renderResults(await res.json(), capType);
+        } else {
+            // A run for a different cap type just finished — start ours now.
+            await fetch(`/api/discover/start?cap_type=${capType}`, {method: 'POST'});
+            pollTimer = setInterval(() => pollDiscover(capType), 3000);
+        }
+    } catch (e) {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        document.getElementById('loading').classList.add('hidden');
+        alert('Error: ' + e.message);
+    }
+}
+
+function renderResults(data, capType) {
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+    loading.classList.add('hidden');
+    results.classList.remove('hidden');
+
+    document.getElementById('results-title').textContent = `Top ${CAP_LABELS[capType]} Stocks`;
+    document.getElementById('results-count').textContent = `${data.count} stocks analyzed`;
+
+    const grid = document.getElementById('stocks-grid');
+    grid.innerHTML = '';
+
+    data.stocks.forEach((stock, i) => {
+        const score = stock.score || 0;
+        let scoreColor = 'text-accent-red';
+        if (score >= 80) scoreColor = 'text-accent-green';
+        else if (score >= 70) scoreColor = 'text-accent-yellow';
+        else if (score >= 60) scoreColor = 'text-orange-400';
+
+        let ratingColor = 'bg-accent-red/20 text-accent-red';
+        if (stock.rating === 'STRONG BUY') ratingColor = 'bg-accent-green/20 text-accent-green';
+        else if (stock.rating === 'WATCHLIST') ratingColor = 'bg-accent-yellow/20 text-accent-yellow';
+        else if (stock.rating === 'SPECULATIVE') ratingColor = 'bg-orange-500/20 text-orange-400';
+
+        const card = document.createElement('div');
+        card.className = 'bg-bg-card rounded-xl border border-slate-700 p-5 card-hover cursor-pointer hover:border-slate-500';
+        card.onclick = () => explain(stock.symbol);
+
+        const scores = stock.scores || {};
+        const scoreBars = [
+            {label: 'Tech', val: scores.technical || 0, max: 30, color: 'blue'},
+            {label: 'News', val: scores.news || 0, max: 20, color: 'green'},
+            {label: 'Sent', val: scores.sentiment || 0, max: 15, color: 'purple'},
+            {label: 'Inst', val: scores.institutional || 0, max: 15, color: 'yellow'},
+            {label: 'Opt', val: scores.options || 0, max: 10, color: 'cyan'},
+            {label: 'Fund', val: scores.fundamentals || 0, max: 10, color: 'pink'},
+        ];
+
+        card.innerHTML = `
+            <div class="flex items-start justify-between mb-3">
+                <div>
+                    <div class="text-xs text-slate-500">#${i + 1}</div>
+                    <div class="font-bold text-lg">${stock.symbol.replace('.NS', '')}</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-3xl font-bold mono ${scoreColor}">${score}</div>
+                    <div class="text-xs text-slate-500">/100</div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <span class="px-2 py-1 text-xs rounded mono ${ratingColor}">${stock.rating}</span>
+            </div>
+            <div class="grid grid-cols-6 gap-1">
+                ${scoreBars.map(s => `
+                    <div class="text-center">
+                        <div class="text-xs text-slate-500">${s.label}</div>
+                        <div class="h-1.5 bg-slate-700 rounded-full mt-0.5 overflow-hidden">
+                            <div class="h-full bg-accent-${s.color} rounded-full" style="width: ${s.val/s.max*100}%"></div>
+                        </div>
+                        <div class="text-xs mono mt-0.5">${s.val}</div>
+                    </div>
+                `).join('')}
+            </div>
+            ${stock.error ? `<div class="text-xs text-accent-red mt-2">⚠ ${stock.error.substring(0, 60)}</div>` : ''}
+            <div class="mt-3 text-xs text-accent-blue text-center">Click for full explanation →</div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+async function explain(symbol) {
+    const panel = document.getElementById('explanation-panel');
+    const content = document.getElementById('explain-content');
+    const symEl = document.getElementById('explain-symbol');
+
+    panel.classList.remove('hidden');
+    symEl.textContent = symbol.replace('.NS', '') + ' — Full Explanation';
+    content.innerHTML = '<div class="animate-pulse">Loading explanation...</div>';
+
+    // Scroll to explanation
+    panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+
+    try {
+        const res = await fetch(`/api/explain/${symbol}`);
+        const data = await res.json();
+
+        if (data.error) {
+            content.innerHTML = `<div class="text-accent-red">Error: ${data.error}</div>`;
+            return;
+        }
+
+        // Render the markdown-like narrative
+        let html = data.narrative
+            .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mb-3">$1</h1>')
+            .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold mt-4 mb-2 text-accent-blue">$1</h2>')
+            .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-3 mb-1">$1</h3>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/^✅ /gm, '<span class="text-accent-green">✅</span> ')
+            .replace(/^❌ /gm, '<span class="text-accent-red">❌</span> ')
+            .replace(/^⚠️ /gm, '<span class="text-accent-yellow">⚠️</span> ')
+            .replace(/^- /gm, '<li class="ml-4">')
+            .replace(/\n/g, '<br>');
+
+        content.innerHTML = html;
+    } catch (e) {
+        content.innerHTML = `<div class="text-accent-red">Network error: ${e.message}</div>`;
+    }
+}
+</script>
+{% endblock %}

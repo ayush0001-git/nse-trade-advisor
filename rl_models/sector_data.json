@@ -1,0 +1,126 @@
+{
+  "last_refresh": "2026-06-22T07:17:33",
+  "sectors": {
+    "MEDIA": {
+      "sector": "MEDIA",
+      "ticker": "^CNXMEDIA",
+      "current": 1515.4,
+      "return_1m": 8.24,
+      "return_3m": 17.16,
+      "return_6m": 7.34,
+      "return_1y": 7.34,
+      "momentum_score": 10.73,
+      "rank": 1
+    },
+    "METAL": {
+      "sector": "METAL",
+      "ticker": "^CNXMETAL",
+      "current": 13020.8,
+      "return_1m": -1.26,
+      "return_3m": 15.05,
+      "return_6m": 28.17,
+      "return_1y": 28.17,
+      "momentum_score": 9.52,
+      "rank": 2
+    },
+    "ENERGY": {
+      "sector": "ENERGY",
+      "ticker": "^CNXENERGY",
+      "current": 40548.1,
+      "return_1m": 0.98,
+      "return_3m": 13.64,
+      "return_6m": 17.07,
+      "return_1y": 17.07,
+      "momentum_score": 8.0,
+      "rank": 3
+    },
+    "REALTY": {
+      "sector": "REALTY",
+      "ticker": "^CNXREALTY",
+      "current": 811.9,
+      "return_1m": 5.85,
+      "return_3m": 16.21,
+      "return_6m": -6.32,
+      "return_1y": -6.32,
+      "momentum_score": 6.52,
+      "rank": 4
+    },
+    "PSU_BANK": {
+      "sector": "PSU_BANK",
+      "ticker": "^CNXPSUBANK",
+      "current": 8716.5,
+      "return_1m": 9.35,
+      "return_3m": 1.73,
+      "return_6m": 6.38,
+      "return_1y": 6.38,
+      "momentum_score": 6.47,
+      "rank": 5
+    },
+    "BANK": {
+      "sector": "BANK",
+      "ticker": "^NSEBANK",
+      "current": 57685.75,
+      "return_1m": 7.7,
+      "return_3m": 6.01,
+      "return_6m": -2.57,
+      "return_1y": -2.57,
+      "momentum_score": 5.14,
+      "rank": 6
+    },
+    "PHARMA": {
+      "sector": "PHARMA",
+      "ticker": "^CNXPHARMA",
+      "current": 24460.3,
+      "return_1m": -1.54,
+      "return_3m": 8.48,
+      "return_6m": 8.42,
+      "return_1y": 8.42,
+      "momentum_score": 3.46,
+      "rank": 7
+    },
+    "AUTO": {
+      "sector": "AUTO",
+      "ticker": "^CNXAUTO",
+      "current": 26583.35,
+      "return_1m": 2.58,
+      "return_3m": 8.07,
+      "return_6m": -2.83,
+      "return_1y": -2.83,
+      "momentum_score": 3.14,
+      "rank": 8
+    },
+    "FIN": {
+      "sector": "FIN",
+      "ticker": "NIFTY_FIN_SERVICE.NS",
+      "current": 26431.15,
+      "return_1m": 4.49,
+      "return_3m": 3.59,
+      "return_6m": -3.55,
+      "return_1y": -3.55,
+      "momentum_score": 2.61,
+      "rank": 9
+    },
+    "FMCG": {
+      "sector": "FMCG",
+      "ticker": "^CNXFMCG",
+      "current": 49558.7,
+      "return_1m": -1.9,
+      "return_3m": 2.25,
+      "return_6m": -9.08,
+      "return_1y": -9.08,
+      "momentum_score": -2.09,
+      "rank": 10
+    },
+    "IT": {
+      "sector": "IT",
+      "ticker": "^CNXIT",
+      "current": 27426.85,
+      "return_1m": -6.02,
+      "return_3m": -5.56,
+      "return_6m": -28.01,
+      "return_1y": -28.01,
+      "momentum_score": -10.28,
+      "rank": 11
+    }
+  }
+}

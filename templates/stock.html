@@ -1,0 +1,867 @@
+{% extends "base.html" %}
+{% block title %}{{ symbol }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="/" class="text-sm text-slate-400 hover:text-white">← Back to Dashboard</a>
+</div>
+
+{% if error %}
+<div class="bg-accent-red/20 border border-accent-red text-accent-red rounded-xl p-6">
+    <h2 class="text-xl font-bold mb-2">Analysis Failed</h2>
+    <p class="mono text-sm">{{ error }}</p>
+    <p class="text-sm mt-2">Possible causes: symbol not found on Yahoo, network issue, or rate limit. Try again in a minute.</p>
+</div>
+{% elif idea %}
+
+<!-- Header card -->
+<div class="bg-bg-card rounded-xl border border-slate-700 p-6 mb-6
+    {% if idea.verdict == 'TAKE' %}border-l-4 border-l-accent-green
+    {% elif idea.verdict == 'WATCH' %}border-l-4 border-l-accent-yellow
+    {% elif idea.verdict == 'AVOID' %}border-l-4 border-l-accent-red
+    {% else %}border-l-4 border-l-slate-600{% endif %}">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold">{{ idea.symbol }}</h1>
+            <div class="text-sm text-slate-400 mt-1">
+                Regime: <span class="mono text-slate-200">{{ idea.regime }}</span> &nbsp;|&nbsp;
+                Direction: <span class="mono
+                    {% if idea.direction == 'long' %}text-accent-green
+                    {% elif idea.direction == 'short' %}text-accent-red
+                    {% else %}text-slate-400{% endif %}">
+                    {% if idea.direction == 'long' %}▲ LONG{% elif idea.direction == 'short' %}▼ SHORT{% else %}—{% endif %}
+                </span>
+            </div>
+        </div>
+        <div class="text-right">
+            <div class="text-4xl font-bold mono">₹{{ "%.2f"|format(idea.current_price) }}</div>
+            <div class="text-xs text-slate-400 mt-1">Current price</div>
+        </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div>
+            <div class="text-xs text-slate-400 uppercase">Verdict</div>
+            <div class="text-xl font-bold
+                {% if idea.verdict == 'TAKE' %}text-accent-green
+                {% elif idea.verdict == 'WATCH' %}text-accent-yellow
+                {% elif idea.verdict == 'AVOID' %}text-accent-red
+                {% else %}text-slate-400{% endif %}">{{ idea.verdict }}</div>
+        </div>
+        <div>
+            <div class="text-xs text-slate-400 uppercase">Confidence</div>
+            <div class="text-xl font-bold mono">{{ idea.confidence|round(0)|int }}/100</div>
+        </div>
+        <div>
+            <div class="text-xs text-slate-400 uppercase">RSI(14)</div>
+            <div class="text-xl font-bold mono {% if idea.rsi and idea.rsi > 70 %}text-accent-red{% elif idea.rsi and idea.rsi < 30 %}text-accent-green{% else %}text-slate-200{% endif %}">
+                {{ "%.1f"|format(idea.rsi) if idea.rsi else "—" }}
+            </div>
+        </div>
+        <div>
+            <div class="text-xs text-slate-400 uppercase">ADX(14)</div>
+            <div class="text-xl font-bold mono">{{ "%.1f"|format(idea.adx) if idea.adx else "—" }}</div>
+        </div>
+        <div>
+            <div class="text-xs text-slate-400 uppercase">ATR(14)</div>
+            <div class="text-xl font-bold mono">{{ "%.2f"|format(idea.atr) if idea.atr else "—" }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- PRICE CHART: candles + SMA20/200 + Bollinger + volume + RSI, with plan levels marked -->
+<div class="surface p-6 mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div>
+            <h2 class="text-lg font-bold">Chart · last 250 sessions</h2>
+            <p class="text-xs text-ink-dim mono">Daily candles · why the levels sit where they do</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 text-[11px] mono">
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 inline-block" style="background:#5b9df9"></span> SMA 20</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 inline-block" style="background:#b691ff"></span> SMA 200</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-0.5 inline-block" style="background:#8a95b0"></span> Bollinger</span>
+            {% if idea.plan %}
+            <span class="text-accent-blue">— entry</span>
+            <span class="text-accent-red">— stop</span>
+            <span class="text-accent-green">— target</span>
+            {% endif %}
+        </div>
+    </div>
+    <div id="chart-loading" class="py-16 text-center text-ink-dim text-sm">
+        <span class="inline-block animate-pulse">↻</span> Loading chart data...
+    </div>
+    <div id="chart-error" class="hidden py-10 text-center text-accent-red text-sm"></div>
+    <div id="chart-wrap" class="hidden">
+        <div id="price-chart" style="height: 380px;"></div>
+        <div class="flex items-center justify-between mt-2 mb-1">
+            <span class="text-[10px] uppercase tracking-widest text-ink-dim mono">RSI (14)</span>
+            <span class="text-[10px] text-ink-dim mono">70 = overbought · 30 = oversold</span>
+        </div>
+        <div id="rsi-chart" style="height: 110px;"></div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- LEFT (2/3): Plan + Signals + Scenarios -->
+    <div class="lg:col-span-2 space-y-6">
+        {% set is_short = idea.direction == 'short' %}
+        {% set cash_blocked = is_short and prefs and prefs.get('cash_only', True) and (prefs.hold_days or 1) > 1 %}
+
+        {# Blocked notice: SHORT setup that user's cash + hold config can't take #}
+        {% if cash_blocked and idea.plan and idea.verdict == 'TAKE' %}
+        <div class="surface p-6" style="background: linear-gradient(180deg, rgba(255,190,77,.08) 0%, rgba(15,21,36,1) 100%); border-color: rgba(255,190,77,.35);">
+            <div class="flex items-start gap-3">
+                <span class="flex-shrink-0 w-10 h-10 rounded-full bg-accent-yellow/15 text-accent-yellow text-xl flex items-center justify-center">ⓘ</span>
+                <div class="flex-1">
+                    <h2 class="text-xl font-bold text-accent-yellow mb-1">You can't take this trade with your current setup</h2>
+                    <p class="text-sm text-ink-muted">
+                        The advisor sees a SHORT opportunity on <span class="font-bold text-ink">{{ idea.symbol.split('.')[0] }}</span> —
+                        it wants you to profit as the price falls. But your plan says you trade <span class="font-bold">cash equity only</span>
+                        with a <span class="font-bold">{{ prefs.hold_days }}-day</span> holding period. NSE / BSE cash doesn't allow overnight
+                        SHORT positions, so this setup would need to be squared off same-day — which conflicts with your holding window.
+                    </p>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <a href="/" class="px-4 py-2 rounded-lg text-white font-bold text-sm"
+                           style="background: linear-gradient(135deg, #22d38a 0%, #5b9df9 100%);">
+                            ← See LONG setups I can take
+                        </a>
+                        <span class="text-xs text-ink-dim self-center">
+                            Or go to the plan and uncheck "Cash equity only" if you trade F&O.
+                        </span>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-border">
+                        <div class="text-xs text-ink-dim mb-2 uppercase tracking-widest mono">What the setup would look like (reference only)</div>
+                        <div class="text-sm text-ink-muted space-y-1">
+                            <div>SELL <span class="mono font-bold text-ink">{{ idea.plan.quantity }} shares</span> at <span class="mono font-bold">₹{{ "%.2f"|format(idea.plan.entry) }}</span></div>
+                            <div>Stop-loss (above): <span class="mono font-bold text-accent-red">₹{{ "%.2f"|format(idea.plan.stop_loss) }}</span> · risk ₹{{ "%.0f"|format(idea.plan.rupees_at_risk) }}</div>
+                            <div>Target (below): <span class="mono font-bold text-accent-green">₹{{ "%.2f"|format(idea.plan.target) }}</span> · gain ≈₹{{ "%.0f"|format(idea.plan.reward_per_share * idea.plan.quantity) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Action ticket: plain-English step-by-step -->
+        {% if idea.plan and idea.verdict == 'TAKE' and not cash_blocked %}
+        {% set open_word = 'SELL' if is_short else 'BUY' %}
+        {% set close_word = 'BUY BACK' if is_short else 'SELL' %}
+        <div class="surface p-6"
+             style="background: linear-gradient(180deg, rgba(34,211,138,.06) 0%, rgba(15,21,36,1) 100%); border-color: rgba(34,211,138,.35);">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold">How to place this trade</h2>
+                <span class="text-[10px] uppercase tracking-widest px-2 py-1 rounded bg-accent-green/15 text-accent-green mono border border-accent-green/40">
+                    Action ticket
+                </span>
+            </div>
+
+            <ol class="space-y-3">
+                <!-- Step 1: open -->
+                <li class="flex items-start gap-3">
+                    <span class="flex-shrink-0 w-7 h-7 rounded-full bg-accent-blue/15 text-accent-blue font-bold mono text-sm flex items-center justify-center">1</span>
+                    <div class="flex-1 text-sm">
+                        <span class="font-bold text-ink">{{ open_word }}</span>
+                        <span class="mono font-bold text-ink">{{ idea.plan.quantity }} shares</span>
+                        of <span class="font-bold">{{ idea.symbol.split('.')[0] }}</span>
+                        at <span class="mono font-bold text-accent-blue">₹{{ "%.2f"|format(idea.plan.entry) }}</span>
+                        <div class="text-xs text-ink-muted mt-1">
+                            Total position: <span class="mono">₹{{ "%.0f"|format(idea.plan.position_value) }}</span>
+                            ({{ "%.0f"|format(idea.plan.position_value / (prefs.capital if prefs and prefs.capital else 100000) * 100) if prefs else "—" }}% of your ₹{{ "{:,.0f}".format(prefs.capital) if prefs and prefs.capital else "—" }} capital)
+                        </div>
+                    </div>
+                </li>
+
+                <!-- Step 2: SL -->
+                <li class="flex items-start gap-3">
+                    <span class="flex-shrink-0 w-7 h-7 rounded-full bg-accent-red/15 text-accent-red font-bold mono text-sm flex items-center justify-center">2</span>
+                    <div class="flex-1 text-sm">
+                        Immediately place a <span class="font-bold text-accent-red">STOP-LOSS</span> order
+                        at <span class="mono font-bold text-accent-red">₹{{ "%.2f"|format(idea.plan.stop_loss) }}</span>
+                        <span class="text-xs text-ink-muted">({{ "above" if is_short else "below" }} entry)</span>
+                        <div class="text-xs text-ink-muted mt-1">
+                            If price hits ₹{{ "%.2f"|format(idea.plan.stop_loss) }}, {{ close_word|lower }} to close.
+                            You lose <span class="mono text-accent-red font-bold">~₹{{ "%.0f"|format(idea.plan.rupees_at_risk) }}</span> and walk away. Do not move the stop.
+                        </div>
+                    </div>
+                </li>
+
+                <!-- Step 3: Target -->
+                <li class="flex items-start gap-3">
+                    <span class="flex-shrink-0 w-7 h-7 rounded-full bg-accent-green/15 text-accent-green font-bold mono text-sm flex items-center justify-center">3</span>
+                    <div class="flex-1 text-sm">
+                        Set a <span class="font-bold text-accent-green">TARGET</span>
+                        at <span class="mono font-bold text-accent-green">₹{{ "%.2f"|format(idea.plan.target) }}</span>
+                        <span class="text-xs text-ink-muted">({{ "below" if is_short else "above" }} entry)</span>
+                        <div class="text-xs text-ink-muted mt-1">
+                            If price hits ₹{{ "%.2f"|format(idea.plan.target) }}, {{ close_word|lower }} to close.
+                            You make <span class="mono text-accent-green font-bold">~₹{{ "%.0f"|format((idea.plan.reward_per_share) * idea.plan.quantity) }}</span> ({{ "%.1f"|format(idea.plan.risk_reward) }}× your risk).
+                        </div>
+                    </div>
+                </li>
+
+                <!-- Step 4: What if -->
+                <li class="flex items-start gap-3">
+                    <span class="flex-shrink-0 w-7 h-7 rounded-full bg-accent-yellow/15 text-accent-yellow font-bold mono text-sm flex items-center justify-center">4</span>
+                    <div class="flex-1 text-sm">
+                        <span class="font-bold text-ink">If neither hits</span> by end of your holding period
+                        {% if prefs and prefs.hold_days %}(~{{ prefs.hold_days }} day{% if prefs.hold_days > 1 %}s{% endif %}){% endif %},
+                        close the position manually at market price.
+                        <div class="text-xs text-ink-muted mt-1">
+                            Don't hope. Setups that stall usually stall for a reason.
+                        </div>
+                    </div>
+                </li>
+
+                {% if is_short %}
+                <!-- Warning for short in Indian cash -->
+                <li class="flex items-start gap-3 pt-3 border-t border-border">
+                    <span class="flex-shrink-0 w-7 h-7 rounded-full bg-accent-red/15 text-accent-red text-lg flex items-center justify-center">⚠</span>
+                    <div class="flex-1 text-sm text-accent-red">
+                        <span class="font-bold">Cash SHORT is intraday only</span> on NSE/BSE.
+                        Square this off before 3:30 PM IST — you cannot hold a short overnight in cash equity.
+                        For overnight shorts you'd need stock futures or put options (both require F&O access and much more capital).
+                    </div>
+                </li>
+                {% endif %}
+            </ol>
+        </div>
+        {% endif %}
+
+        <!-- The Plan (hidden when the trade is blocked by cash-only + hold filter) -->
+        {% if idea.plan and not cash_blocked %}
+        <div class="surface p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold">The trade plan</h2>
+                {% if idea.direction == 'short' %}
+                <span class="text-[10px] uppercase tracking-widest px-2 py-1 rounded bg-accent-red/15 text-accent-red mono border border-accent-red/40">
+                    ▼ SHORT · profit when price falls
+                </span>
+                {% elif idea.direction == 'long' %}
+                <span class="text-[10px] uppercase tracking-widest px-2 py-1 rounded bg-accent-green/15 text-accent-green mono border border-accent-green/40">
+                    ▲ LONG · profit when price rises
+                </span>
+                {% endif %}
+            </div>
+            {% set short = idea.direction == 'short' %}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="bg-bg-sub rounded-lg p-4 border border-border">
+                    <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Entry</div>
+                    <div class="text-2xl font-bold mono">₹{{ "%.2f"|format(idea.plan.entry) }}</div>
+                    <div class="text-xs text-ink-muted mt-2">
+                        {% if short %}You SELL (borrowed shares) at this price to open.{% else %}You BUY at this price to open.{% endif %}
+                    </div>
+                </div>
+                <div class="bg-accent-red/10 rounded-lg p-4 border border-accent-red/30">
+                    <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">
+                        Stop-loss {% if short %}(above entry){% else %}(below entry){% endif %}
+                    </div>
+                    <div class="text-2xl font-bold mono text-accent-red">₹{{ "%.2f"|format(idea.plan.stop_loss) }}</div>
+                    <div class="text-xs text-ink-muted mt-2">
+                        {% if short %}If price RISES to here, buy back and exit. Small planned loss (−₹{{ "%.0f"|format(idea.plan.risk_per_share) }}/share) — it protects you from a bigger one.{% else %}If price FALLS to here, sell and exit. Small planned loss (−₹{{ "%.0f"|format(idea.plan.risk_per_share) }}/share) — it protects you from a bigger one.{% endif %}
+                    </div>
+                </div>
+                <div class="bg-accent-green/10 rounded-lg p-4 border border-accent-green/30">
+                    <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">
+                        Target {% if short %}(below entry){% else %}(above entry){% endif %}
+                    </div>
+                    <div class="text-2xl font-bold mono text-accent-green">₹{{ "%.2f"|format(idea.plan.target) }}</div>
+                    <div class="text-xs text-ink-muted mt-2">
+                        {% if short %}If price FALLS to here, buy back and book +₹{{ "%.0f"|format(idea.plan.reward_per_share) }}/share profit.{% else %}If price RISES to here, sell and book +₹{{ "%.0f"|format(idea.plan.reward_per_share) }}/share profit.{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-4 gap-3 text-sm">
+                <div class="bg-slate-800/30 rounded-lg p-3">
+                    <div class="text-xs text-slate-400">Quantity</div>
+                    <div class="font-bold mono">{{ idea.plan.quantity }} shares</div>
+                </div>
+                <div class="bg-slate-800/30 rounded-lg p-3">
+                    <div class="text-xs text-slate-400">R:R</div>
+                    <div class="font-bold mono">{{ "%.2f"|format(idea.plan.risk_reward) }} : 1</div>
+                </div>
+                <div class="bg-slate-800/30 rounded-lg p-3">
+                    <div class="text-xs text-slate-400">Capital at Risk</div>
+                    <div class="font-bold mono text-accent-red">₹{{ "%.0f"|format(idea.plan.rupees_at_risk) }}</div>
+                </div>
+                <div class="bg-slate-800/30 rounded-lg p-3">
+                    <div class="text-xs text-slate-400">Position Value</div>
+                    <div class="font-bold mono">₹{{ "%.0f"|format(idea.plan.position_value) }}</div>
+                </div>
+            </div>
+            <!-- Quick trade actions -->
+            <div class="mt-4 flex flex-wrap gap-2 items-center">
+                <button onclick="logTrade('{{ idea.symbol }}', {{ idea.plan.quantity }}, {{ idea.plan.entry }})"
+                        class="px-4 py-2 bg-accent-blue hover:bg-blue-600 text-white rounded-lg text-sm font-medium">
+                    Log this trade
+                </button>
+                <a href="/backtest/{{ idea.symbol.split('.')[0] }}"
+                   class="px-4 py-2 border border-border hover:bg-bg-hover text-ink rounded-lg text-sm font-medium">
+                    📊 Backtest this strategy
+                </a>
+                <span class="text-xs text-ink-dim">
+                    You'll choose how many shares
+                </span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Signals / Evidence (labels are relative to the trade DIRECTION) -->
+        {% if idea.signals %}
+        {# Signals in the same direction as the trade = FOR it. Opposite = AGAINST it. #}
+        {% set trade_dir = idea.direction %}
+        {% set for_signals = idea.signals|selectattr('direction','equalto',trade_dir)|list %}
+        {% set against_signals = idea.signals|rejectattr('direction','equalto',trade_dir)|list %}
+        <div class="surface p-6">
+            <h2 class="text-xl font-bold mb-1">Evidence ({{ idea.signals|length }} signals)</h2>
+            <p class="text-xs text-ink-dim mb-4 mono">
+                Rated relative to the {% if idea.direction == 'short' %}SHORT{% elif idea.direction == 'long' %}LONG{% else %}proposed{% endif %} setup.
+                A bearish signal is FOR a short and AGAINST a long, and vice versa.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-accent-green mb-2">FOR the trade (+)</h3>
+                    {% if for_signals %}
+                    <ul class="space-y-2 text-sm">
+                        {% for s in for_signals %}
+                        <li class="flex items-start">
+                            <span class="text-accent-green mr-2">+</span>
+                            <span>{{ s.note }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-sm text-ink-dim italic">No supporting signals</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-accent-red mb-2">AGAINST the trade (−)</h3>
+                    {% if against_signals %}
+                    <ul class="space-y-2 text-sm">
+                        {% for s in against_signals %}
+                        <li class="flex items-start">
+                            <span class="text-accent-red mr-2">−</span>
+                            <span>{{ s.note }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-sm text-ink-dim italic">No opposing signals</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Scenarios -->
+        {% if idea.scenarios %}
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-6">
+            <h2 class="text-xl font-bold mb-4">Scenarios (rough probabilities, not guarantees)</h2>
+            <div class="space-y-3">
+                {% for sc in idea.scenarios %}
+                <div class="bg-slate-800/30 rounded-lg p-4
+                    {% if sc.name == 'bull' %}border-l-4 border-l-accent-green
+                    {% elif sc.name == 'bear' %}border-l-4 border-l-accent-red
+                    {% else %}border-l-4 border-l-accent-blue{% endif %}">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-bold uppercase">{{ sc.name }}</span>
+                        <span class="mono text-sm
+                            {% if sc.name == 'bull' %}text-accent-green
+                            {% elif sc.name == 'bear' %}text-accent-red
+                            {% else %}text-accent-blue{% endif %}">~{{ (sc.probability * 100)|round(0)|int }}%</span>
+                    </div>
+                    <div class="text-sm text-slate-300">
+                        <span class="mono">→ ₹{{ "%.2f"|format(sc.target) }}</span>
+                        <span class="text-slate-500">({{ "%.1f"|format(sc.move_pct) }}%)</span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1">{{ sc.rationale }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Narration -->
+        {% if idea.narration %}
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-6">
+            <h2 class="text-xl font-bold mb-4">The Read</h2>
+            <div class="prose prose-invert max-w-none text-sm text-slate-300 space-y-3">
+                {% for para in idea.narration.split('\n\n') %}
+                <p>{{ para }}</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- RIGHT (1/3): P&L Calculator + Vetoes + Notes -->
+    <div class="space-y-6">
+        <!-- P&L Calculator for this stock -->
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-5">
+            <h2 class="text-lg font-bold mb-3">P&amp;L Calculator</h2>
+            <form id="pnl-form" class="space-y-2">
+                <input type="hidden" name="symbol" value="{{ idea.symbol }}">
+                <div>
+                    <label class="text-xs text-slate-400 uppercase">Quantity</label>
+                    <input type="number" name="quantity" placeholder="50" min="1" required value="{{ idea.plan.quantity if idea.plan else 50 }}"
+                           class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono focus:outline-none focus:border-accent-blue">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 uppercase">Buy Price ₹</label>
+                    <input type="number" name="buy_price" placeholder="1300" min="0.01" step="0.01" required value="{{ "%.2f"|format(idea.current_price) }}"
+                           class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono focus:outline-none focus:border-accent-blue">
+                </div>
+                <button type="submit" class="w-full py-2 bg-accent-blue hover:bg-blue-600 text-white rounded-lg text-sm font-medium">
+                    Calculate
+                </button>
+            </form>
+            <div id="pnl-result" class="hidden mt-4 pt-4 border-t border-slate-700 space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Current:</span>
+                    <span class="mono font-bold" id="pnl-current">—</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Invested:</span>
+                    <span class="mono" id="pnl-invested">—</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Value:</span>
+                    <span class="mono" id="pnl-value">—</span>
+                </div>
+                <div class="flex justify-between text-lg pt-2 border-t border-slate-700">
+                    <span class="text-slate-400">P&amp;L:</span>
+                    <span class="mono font-bold" id="pnl-amount">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Red signals -->
+        {% if idea.vetoes %}
+        <div class="bg-bg-card rounded-xl border border-accent-red/30 p-5">
+            <h2 class="text-lg font-bold mb-3 text-accent-red">⚠ Red Signals</h2>
+            <ul class="space-y-2 text-sm">
+                {% for v in idea.vetoes %}
+                <li class="flex items-start">
+                    <span class="mono text-xs mr-2
+                        {% if v.severity == 'hard' %}text-accent-red{% else %}text-accent-yellow{% endif %}">
+                        [{{ v.severity|upper }}]
+                    </span>
+                    <span>{{ v.reason }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Notes -->
+        {% if idea.notes %}
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-5">
+            <h2 class="text-lg font-bold mb-3">Analyst Notes</h2>
+            <ul class="space-y-2 text-sm text-slate-300">
+                {% for n in idea.notes %}
+                <li class="flex items-start">
+                    <span class="text-slate-500 mr-2">•</span>
+                    <span>{{ n }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- RL Agent Second Opinion -->
+        <div class="bg-bg-card rounded-xl border border-accent-purple/30 p-5">
+            <h2 class="text-lg font-bold mb-1 flex items-center">
+                <span class="w-2 h-2 bg-accent-purple rounded-full mr-2"></span>
+                RL Agent Second Opinion
+            </h2>
+            <p class="text-xs text-slate-400 mb-3">PPO agent trained on NSE stocks with Indian cost model. Independent of the advisor's pipeline.</p>
+            <div id="rl-loading" class="text-sm text-slate-400">
+                <span class="inline-block animate-pulse">↻ Loading RL agent's verdict...</span>
+            </div>
+            <div id="rl-result" class="hidden">
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-400 uppercase">RL Action</div>
+                        <div class="text-xl font-bold mono" id="rl-action">—</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-400 uppercase">Position Size</div>
+                        <div class="text-xl font-bold mono" id="rl-size">—</div>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-400 space-y-1">
+                    <div>Suggested capital: <span class="mono text-slate-200" id="rl-capital">—</span></div>
+                    <div>Rupees to deploy (₹1L base): <span class="mono text-slate-200" id="rl-rupees">—</span></div>
+                    <div>Regime detected: <span class="mono text-slate-200" id="rl-regime">—</span></div>
+                </div>
+                <div id="rl-agreement" class="mt-3 p-2 rounded-lg text-xs"></div>
+            </div>
+            <div id="rl-error" class="hidden text-xs text-slate-500 italic mt-2"></div>
+        </div>
+
+        <!-- Sector Context (Top-Down) -->
+        <div class="bg-bg-card rounded-xl border border-accent-yellow/30 p-5">
+            <h2 class="text-lg font-bold mb-1 flex items-center">
+                <span class="w-2 h-2 bg-accent-yellow rounded-full mr-2"></span>
+                Sector Context (Top-Down)
+            </h2>
+            <p class="text-xs text-slate-400 mb-3">From Zerodha Varsity: stocks in strong sectors outperform.</p>
+            <div id="sector-loading" class="text-sm text-slate-400">
+                <span class="inline-block animate-pulse">↻ Loading sector context...</span>
+            </div>
+            <div id="sector-result" class="hidden">
+                <div class="grid grid-cols-2 gap-3 mb-2">
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-400 uppercase">Sector</div>
+                        <div class="text-base font-bold" id="sector-name">—</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-400 uppercase">Rank / Total</div>
+                        <div class="text-base font-bold mono" id="sector-rank">—</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mb-2">
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-400 uppercase">Momentum</div>
+                        <div class="text-base font-bold mono" id="sector-momentum">—</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-400 uppercase">Bias</div>
+                        <div class="text-base font-bold" id="sector-bias">—</div>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-400" id="sector-explanation"></div>
+            </div>
+            <div id="sector-err" class="hidden text-xs text-slate-500 italic mt-2"></div>
+        </div>
+
+        <!-- Strategy Lab Signals -->
+        <div class="bg-bg-card rounded-xl border border-accent-green/30 p-5">
+            <h2 class="text-lg font-bold mb-1 flex items-center">
+                <span class="w-2 h-2 bg-accent-green rounded-full mr-2"></span>
+                Strategy Lab Signals (6 strategies)
+            </h2>
+            <p class="text-xs text-slate-400 mb-3">From quantifiedstrategies.com — 6 backtested strategies applied to this stock.</p>
+            <div id="strat-loading" class="text-sm text-slate-400">
+                <span class="inline-block animate-pulse">↻ Loading strategy signals...</span>
+            </div>
+            <div id="strat-result" class="hidden space-y-2"></div>
+            <div id="strat-err" class="hidden text-xs text-slate-500 italic mt-2"></div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if idea %}
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(async () => {
+    const loading = document.getElementById('chart-loading');
+    const errBox = document.getElementById('chart-error');
+    const wrap = document.getElementById('chart-wrap');
+    if (!loading) return;
+    try {
+        const res = await fetch('/api/chart/{{ symbol }}');
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'chart API failed');
+        loading.classList.add('hidden');
+        wrap.classList.remove('hidden');
+
+        const theme = {
+            layout: { background: { color: 'transparent' }, textColor: '#8a95b0',
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 11 },
+            grid: { vertLines: { color: 'rgba(30,39,64,.5)' }, horzLines: { color: 'rgba(30,39,64,.5)' } },
+            rightPriceScale: { borderColor: '#1e2740' },
+            timeScale: { borderColor: '#1e2740' },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        };
+
+        // ---- main price chart ----
+        const priceEl = document.getElementById('price-chart');
+        const chart = LightweightCharts.createChart(priceEl, { ...theme, height: 380 });
+
+        const bbU = chart.addLineSeries({ color: 'rgba(138,149,176,.45)', lineWidth: 1,
+                                          priceLineVisible: false, lastValueVisible: false });
+        const bbL = chart.addLineSeries({ color: 'rgba(138,149,176,.45)', lineWidth: 1,
+                                          priceLineVisible: false, lastValueVisible: false });
+        bbU.setData(d.bb_upper); bbL.setData(d.bb_lower);
+
+        const candles = chart.addCandlestickSeries({
+            upColor: '#22d38a', downColor: '#ff5b6f',
+            wickUpColor: '#22d38a', wickDownColor: '#ff5b6f',
+            borderVisible: false,
+        });
+        candles.setData(d.candles);
+
+        const s20 = chart.addLineSeries({ color: '#5b9df9', lineWidth: 2,
+                                          priceLineVisible: false, lastValueVisible: false });
+        const s200 = chart.addLineSeries({ color: '#b691ff', lineWidth: 2,
+                                           priceLineVisible: false, lastValueVisible: false });
+        s20.setData(d.sma20); s200.setData(d.sma200);
+
+        const vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' },
+                                               priceLineVisible: false, lastValueVisible: false });
+        chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+        vol.setData(d.volume.map(v => ({ time: v.time, value: v.value,
+                                         color: v.up ? 'rgba(34,211,138,.35)' : 'rgba(255,91,111,.35)' })));
+
+        // ---- plan levels marked on the chart ----
+        {% if idea.plan %}
+        const mkLine = (price, color, title) => candles.createPriceLine({
+            price, color, lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true, title,
+        });
+        mkLine({{ idea.plan.entry }}, '#5b9df9', 'ENTRY');
+        mkLine({{ idea.plan.stop_loss }}, '#ff5b6f', 'STOP');
+        mkLine({{ idea.plan.target }}, '#22d38a', 'TARGET');
+        {% endif %}
+
+        chart.timeScale().fitContent();
+
+        // ---- RSI pane ----
+        const rsiEl = document.getElementById('rsi-chart');
+        const rsiChart = LightweightCharts.createChart(rsiEl, { ...theme, height: 110 });
+        const rsiSeries = rsiChart.addLineSeries({ color: '#ffbe4d', lineWidth: 2,
+                                                   priceLineVisible: false, lastValueVisible: true });
+        rsiSeries.setData(d.rsi);
+        rsiSeries.createPriceLine({ price: 70, color: 'rgba(255,91,111,.5)', lineWidth: 1,
+                                    lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: '' });
+        rsiSeries.createPriceLine({ price: 30, color: 'rgba(34,211,138,.5)', lineWidth: 1,
+                                    lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: '' });
+        rsiChart.timeScale().fitContent();
+
+        // keep the two panes' time scales in step
+        chart.timeScale().subscribeVisibleLogicalRangeChange(r => {
+            if (r) rsiChart.timeScale().setVisibleLogicalRange(r);
+        });
+        rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r => {
+            if (r) chart.timeScale().setVisibleLogicalRange(r);
+        });
+
+        // responsive
+        new ResizeObserver(() => {
+            chart.applyOptions({ width: priceEl.clientWidth });
+            rsiChart.applyOptions({ width: rsiEl.clientWidth });
+        }).observe(priceEl);
+    } catch (e) {
+        loading.classList.add('hidden');
+        errBox.textContent = 'Chart failed to load: ' + e.message;
+        errBox.classList.remove('hidden');
+    }
+})();
+</script>
+{% endif %}
+<script>
+async function logTrade(symbol, suggestedQty, entryPrice) {
+    const input = prompt(
+        `How many shares of ${symbol} did you actually take?\n` +
+        `Advisor suggested: ${suggestedQty} shares at ~₹${entryPrice.toFixed(2)}\n` +
+        `(Enter your real quantity — leave as-is to use the suggestion, or type 0 to cancel.)`,
+        String(suggestedQty)
+    );
+    if (input === null) return;                 // user hit Cancel
+    const qty = parseInt(input, 10);
+    if (!Number.isFinite(qty) || qty <= 0) {
+        if (qty === 0) return;                  // explicit cancel via 0
+        alert('Please enter a whole number greater than 0.');
+        return;
+    }
+
+    const note = prompt('Optional note for this trade (setup name, why you took it, etc.):', '') || '';
+
+    try {
+        const res = await fetch('/api/journal/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol, quantity: qty, note }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert(
+                `✓ Logged trade #${data.id}\n\n` +
+                `${data.symbol} ${data.direction.toUpperCase()} ${data.quantity} shares @ ₹${data.entry.toFixed(2)}\n` +
+                `Stop-loss: ₹${data.stop_loss.toFixed(2)}\n` +
+                `Target:    ₹${data.target.toFixed(2)}\n\n` +
+                `See it in your journal at /history.`
+            );
+        } else {
+            alert('Failed: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
+
+document.getElementById('pnl-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const payload = {
+        symbol: form.symbol.value,
+        quantity: parseInt(form.quantity.value),
+        buy_price: parseFloat(form.buy_price.value),
+    };
+    try {
+        const res = await fetch('/api/pnl', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById('pnl-current').textContent = '₹' + data.current_price.toFixed(2);
+            document.getElementById('pnl-invested').textContent = '₹' + data.invested.toLocaleString('en-IN');
+            document.getElementById('pnl-value').textContent = '₹' + data.current_value.toLocaleString('en-IN');
+            const amt = document.getElementById('pnl-amount');
+            amt.textContent = (data.pnl >= 0 ? '+' : '') + '₹' + data.pnl.toLocaleString('en-IN') + ' (' + (data.pnl_pct >= 0 ? '+' : '') + data.pnl_pct.toFixed(2) + '%)';
+            amt.className = 'mono font-bold ' + (data.pnl >= 0 ? 'text-accent-green' : 'text-accent-red');
+            document.getElementById('pnl-result').classList.remove('hidden');
+        } else {
+            alert(data.error);
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+});
+
+// Fetch RL agent's second opinion on page load
+(async () => {
+    const advisorVerdict = '{{ idea.verdict if idea else "" }}';
+    const advisorDirection = '{{ idea.direction if idea else "" }}';
+    const sym = '{{ symbol }}';
+    const rlLoading = document.getElementById('rl-loading');
+    const rlResult = document.getElementById('rl-result');
+    const rlError = document.getElementById('rl-error');
+    if (!rlLoading) return;  // not on stock detail page
+
+    try {
+        const res = await fetch(`/api/rl_opinion/${sym}`);
+        const data = await res.json();
+        rlLoading.classList.add('hidden');
+
+        if (!res.ok || !data.available) {
+            rlError.textContent = data.error || 'RL agent not available';
+            rlError.classList.remove('hidden');
+            return;
+        }
+
+        // Map action code to display
+        const actionColors = {HOLD: 'text-slate-400', BUY: 'text-accent-green', SELL: 'text-accent-red'};
+        document.getElementById('rl-action').textContent = data.action;
+        document.getElementById('rl-action').className = 'text-xl font-bold mono ' + (actionColors[data.action] || 'text-slate-400');
+        document.getElementById('rl-size').textContent = (data.position_size * 100).toFixed(0) + '%';
+        document.getElementById('rl-capital').textContent = data.suggested_capital_pct + '% of capital';
+        document.getElementById('rl-rupees').textContent = '₹' + data.rupees_to_deploy.toLocaleString('en-IN');
+        document.getElementById('rl-regime').textContent = data.regime;
+
+        // Agreement analysis
+        const agreement = document.getElementById('rl-agreement');
+        let agree = false, msg = '';
+        if (data.action === 'BUY' && advisorDirection === 'long') {
+            agree = true; msg = '✓ Both advisor and RL agent agree: LONG/BUY. Higher confidence.';
+        } else if (data.action === 'SELL' && advisorDirection === 'short') {
+            agree = true; msg = '✓ Both advisor and RL agent agree: SHORT/SELL. Higher confidence.';
+        } else if (data.action === 'HOLD') {
+            msg = '— RL agent suggests holding (no new position).';
+        } else if (data.action === 'BUY' && advisorDirection === 'short') {
+            msg = '⚠ Conflict: advisor says SHORT, RL says BUY. Be cautious.';
+        } else if (data.action === 'SELL' && advisorDirection === 'long') {
+            msg = '⚠ Conflict: advisor says LONG, RL says SELL. Be cautious.';
+        } else {
+            msg = `— Advisor: ${advisorVerdict} (${advisorDirection}). RL: ${data.action}.`;
+        }
+        agreement.textContent = msg;
+        agreement.className = 'mt-3 p-2 rounded-lg text-xs ' +
+            (agree ? 'bg-accent-green/20 text-accent-green' :
+             msg.includes('Conflict') ? 'bg-accent-red/20 text-accent-red' :
+             'bg-slate-800/50 text-slate-300');
+
+        rlResult.classList.remove('hidden');
+    } catch (e) {
+        rlLoading.classList.add('hidden');
+        rlError.textContent = 'Network error: ' + e.message;
+        rlError.classList.remove('hidden');
+    }
+})();
+
+// Fetch sector context (top-down from Zerodha Varsity)
+(async () => {
+    const sym = '{{ symbol }}';
+    const loading = document.getElementById('sector-loading');
+    const result = document.getElementById('sector-result');
+    const err = document.getElementById('sector-err');
+    if (!loading) return;
+
+    try {
+        const res = await fetch(`/api/sector_context/${sym}`);
+        const data = await res.json();
+        loading.classList.add('hidden');
+
+        if (!res.ok || !data.available) {
+            err.textContent = data.error || data.reason || 'Not available';
+            err.classList.remove('hidden');
+            return;
+        }
+
+        document.getElementById('sector-name').textContent = data.sector;
+        document.getElementById('sector-rank').textContent = `#${data.sector_rank} / ${data.n_sectors}`;
+        const mom = document.getElementById('sector-momentum');
+        mom.textContent = (data.momentum_pct >= 0 ? '+' : '') + data.momentum_pct + '%';
+        mom.className = 'text-base font-bold mono ' + (data.momentum_pct >= 0 ? 'text-accent-green' : 'text-accent-red');
+        const bias = document.getElementById('sector-bias');
+        bias.textContent = data.bias;
+        bias.className = 'text-base font-bold ' +
+            (data.bias === 'BULLISH' ? 'text-accent-green' :
+             data.bias === 'BEARISH' ? 'text-accent-red' : 'text-slate-300');
+        document.getElementById('sector-explanation').textContent = data.explanation;
+        result.classList.remove('hidden');
+    } catch (e) {
+        loading.classList.add('hidden');
+        err.textContent = 'Network error: ' + e.message;
+        err.classList.remove('hidden');
+    }
+})();
+
+// Fetch strategy lab signals (6 strategies from quantifiedstrategies.com)
+(async () => {
+    const sym = '{{ symbol }}';
+    const loading = document.getElementById('strat-loading');
+    const result = document.getElementById('strat-result');
+    const err = document.getElementById('strat-err');
+    if (!loading) return;
+
+    try {
+        const res = await fetch(`/api/strategy_signals/${sym}`);
+        const data = await res.json();
+        loading.classList.add('hidden');
+
+        if (res.ok && data.signals) {
+            const colors = {BUY: 'text-accent-green', SELL: 'text-accent-red', HOLD: 'text-slate-400'};
+            const bgs = {BUY: 'bg-accent-green/10', SELL: 'bg-accent-red/10', HOLD: 'bg-slate-800/30'};
+            for (const [key, strat] of Object.entries(data.signals)) {
+                const div = document.createElement('div');
+                div.className = `rounded-lg p-2 ${bgs[strat.signal] || bgs.HOLD}`;
+                div.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold">${strat.name}</span>
+                        <span class="text-sm font-bold mono ${colors[strat.signal] || colors.HOLD}">${strat.signal}</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-0.5">${strat.description.substring(0, 80)}...</div>
+                `;
+                result.appendChild(div);
+            }
+            result.classList.remove('hidden');
+        } else {
+            err.textContent = data.error || 'Strategy signals not available';
+            err.classList.remove('hidden');
+        }
+    } catch (e) {
+        loading.classList.add('hidden');
+        err.textContent = 'Network error: ' + e.message;
+        err.classList.remove('hidden');
+    }
+})();
+</script>
+{% endblock %}

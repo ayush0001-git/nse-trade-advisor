@@ -1,0 +1,631 @@
+# ===========================================================================
+#  advisor configuration  (v2.1 - FULL NSE + BSE universe)
+#  Everything here is OPTIONAL - delete this file and the built-in defaults
+#  are used. Requires PyYAML (pip install pyyaml) to take effect; without it,
+#  the defaults below are used anyway and you can override via .env / env vars.
+# ===========================================================================
+
+# --- money & risk ----------------------------------------------------------
+capital: 100000          # YOUR trading capital in INR. SET THIS.
+risk_pct: 0.01           # risk 1% of capital per trade (0.005-0.02 sensible)
+max_exposure_pct: 0.25   # no single position deploys >25% of capital
+atr_mult: 2.0            # stop distance = atr_mult x ATR
+target_rr: 2.5           # aim for 2.5 : 1 reward-to-risk
+min_rr: 2.0              # reject anything below 2 : 1  (a red signal)
+min_confidence: 35       # reject setups below this evidence score
+slippage_pct: 0.0015     # assume ~0.15% slippage beyond the stop when sizing
+gap_buffer_atr: 0.25     # plus 0.25 x ATR of gap buffer when sizing
+
+# --- universe --------------------------------------------------------------
+# FULL NSE + BSE universe: 550 NSE-listed stocks (no suffix; the .NS
+# suffix is added automatically) PLUS 16 BSE-only stocks
+# (suffixed with .BO so the data layer fetches them from BSE).
+# Total: 566 symbols - covers every tradeable Indian equity on NSE & BSE.
+#
+# Scanning all 566 live via yfinance takes ~25-40 minutes due to Yahoo's
+# rate limit (scan_delay_sec=0.5s is enforced between symbols).
+# Tips:
+#   - To scan faster, set ADVISOR_WATCHLIST=RELIANCE,TCS,INFY in .env
+#   - Symbols that yfinance can't resolve are listed in scan_failures at the
+#     end of each scan, so you can spot delisted/illiquid tickers.
+#   - Some BSE-only small caps may not have yfinance coverage; those will
+#     show up as scan failures and can be ignored.
+exchange: NSE            # default exchange for symbols without an explicit suffix
+data_source: yfinance    # yfinance | csv
+csv_dir: "sample_data"   # folder of CSVs when data_source: csv
+watchlist:  # 566 symbols (550 NSE + 16 BSE-only)
+  - RELIANCE
+  - TCS
+  - HDFCBANK
+  - INFY
+  - ICICIBANK
+  - SBIN
+  - BHARTIARTL
+  - ITC
+  - LT
+  - AXISBANK
+  - HINDUNILVR
+  - MARUTI
+  - KOTAKBANK
+  - BAJFINANCE
+  - ASIANPAINT
+  - HCLTECH
+  - WIPRO
+  - SUNPHARMA
+  - TATAMOTORS
+  - TITAN
+  - ULTRACEMCO
+  - NESTLEIND
+  - POWERGRID
+  - NTPC
+  - TATASTEEL
+  - M&M
+  - ONGC
+  - TECHM
+  - COALINDIA
+  - BAJAJFINSV
+  - GRASIM
+  - INDUSINDBK
+  - ADANIENT
+  - JSWSTEEL
+  - HINDALCO
+  - DIVISLAB
+  - DRREDDY
+  - CIPLA
+  - BAJAJ-AUTO
+  - BRITANNIA
+  - EICHERMOT
+  - HEROMOTOCO
+  - BPCL
+  - SHRIRAMFIN
+  - TATAPOWER
+  - ADANIPORTS
+  - LTIM
+  - HDFCLIFE
+  - SBILIFE
+  - TRENT
+  - DMART
+  - ZOMATO
+  - PIDILITIND
+  - DABUR
+  - GODREJCP
+  - MARICO
+  - COLPAL
+  - HAVELLS
+  - AMBER
+  - VBL
+  - BANKBARODA
+  - PNB
+  - IOC
+  - MCDOWELL-N
+  - UBL
+  - SIEMENS
+  - ABB
+  - CGPOWER
+  - POLYCAB
+  - BEL
+  - HAL
+  - BHEL
+  - VEDL
+  - NMDC
+  - SAIL
+  - JINDALSTEL
+  - APLAPOLLO
+  - TORNTPHARM
+  - AUROPHARMA
+  - ALKEM
+  - LAURUSLABS
+  - BIOCON
+  - ZYDUSLIFE
+  - GLENMARK
+  - IPCALAB
+  - MAXHEALTH
+  - ABFRL
+  - TATACONSUM
+  - BAJAJHLDNG
+  - ICICIPRULI
+  - HDFCAMC
+  - ICICIGI
+  - SBICARD
+  - BANDHANBNK
+  - FEDERALBNK
+  - IDFCFIRSTB
+  - AUBANK
+  - MUTHOOTFIN
+  - CHOLAFIN
+  - PFC
+  - RECLTD
+  - LICHSGFIN
+  - IIFL
+  - BSE
+  - ANGELONE
+  - RBLBANK
+  - BANKINDIA
+  - CANBK
+  - IOB
+  - MAHABANK
+  - UCOBANK
+  - SOUTHIND
+  - CITYUNION
+  - DCBBANK
+  - KARURVYSYA
+  - J&KBANK
+  - IIFLFIN
+  - LTF
+  - SBFCFIN
+  - KFINTECH
+  - CAMSDATA
+  - CDSL
+  - MCX
+  - IEX
+  - CGCL
+  - MANAPPURAM
+  - LICI
+  - STARHEALTH
+  - NEWINDIA
+  - ICICILOMB
+  - GICRE
+  - MMFSL
+  - PERSISTENT
+  - COFORGE
+  - MPHASIS
+  - OFSS
+  - LTTS
+  - KPITTECH
+  - BSOFT
+  - ZENSARTECH
+  - TATAELXSI
+  - TATAADVANCED
+  - AFFLE
+  - INDIAMART
+  - NAUKRI
+  - JUSTDIAL
+  - NEWGEN
+  - CEINFO
+  - INTELLECT
+  - RATEGAIN
+  - EASEMYTRIP
+  - TBOBDK
+  - DELHIVERY
+  - LATENTVIEW
+  - TANLA
+  - TRACXN
+  - NYKAA
+  - PAYTM
+  - POLICYBZR
+  - CARTRADE
+  - YATRA
+  - LUPIN
+  - ABBOTINDIA
+  - JBHT
+  - METROPOLIS
+  - THYROCARE
+  - POLYMED
+  - FORTIS
+  - ASTERDM
+  - GLOBALHOSP
+  - RAINBOW
+  - WOCKPHARMA
+  - ASHOKLEY
+  - TVSMOTOR
+  - BOSCHLTD
+  - MRF
+  - APOLLOTYRE
+  - EXIDEIND
+  - AMARAJABAT
+  - TIINDIA
+  - BHARATFORG
+  - GABRIEL
+  - ENDURANCE
+  - SUPRAJIT
+  - MINDACORP
+  - WABCOINDIA
+  - SONACOMS
+  - SCHAEFFLER
+  - CIEINDIA
+  - MUNJALSHOW
+  - JBM
+  - WHEELSINDIA
+  - PRECAMR
+  - SHREECEM
+  - AMBUJACEM
+  - ACC
+  - DALBHARAT
+  - RAMCOCEM
+  - JKCEMENT
+  - PRISMCEM
+  - HEIDELBERG
+  - OBEROIRLTY
+  - DLF
+  - GODREJPROP
+  - PRESTIGE
+  - BRIGADE
+  - SOBHA
+  - LODHA
+  - SUNTECK
+  - PHOENIXLTD
+  - NCC
+  - ENGINEERSIN
+  - RITES
+  - IRCON
+  - RVNL
+  - IRFC
+  - BGRSYS
+  - TITAGARH
+  - KECINTL
+  - KALPATPOW
+  - KNRCON
+  - PNCINFRA
+  - HGINFRA
+  - SIMPLEXINF
+  - VAIBHAVGBL
+  - NBCC
+  - HOUSINGDEV
+  - ANANTRAJ
+  - MAHLIFE
+  - ADANIPOWER
+  - ADANIGREEN
+  - ADANIENSOL
+  - OIL
+  - GAIL
+  - GUJGASLTD
+  - PLNG
+  - IGL
+  - MGL
+  - ATGL
+  - TORNTPOWER
+  - CESC
+  - NHPC
+  - SJVN
+  - NLCINDIA
+  - MRPL
+  - PETRONET
+  - HINDPETRO
+  - RELINFRA
+  - REC
+  - TILAKNAGAR
+  - EMAMILTD
+  - BAJAJCON
+  - BERGERPAINT
+  - AKZONOBAY
+  - INDIGO
+  - JUBLFOOD
+  - DEVYANI
+  - VMART
+  - SHOPPERS
+  - PAGEIND
+  - TCNSBRANDS
+  - MUFTI
+  - KEWALKIRAN
+  - RAYMOND
+  - ARVIND
+  - CAMPING
+  - LIBAS
+  - RELAXO
+  - BATAINDIA
+  - HAWKINS
+  - TTKPRESTIG
+  - STOVE
+  - BLUEDART
+  - NATIONALUM
+  - JSPL
+  - RATNAMANI
+  - MAHSEAMLES
+  - WELCORP
+  - RUSHIL
+  - SUZLON
+  - JSL
+  - MAITHAN
+  - SPONGE
+  - BEPL
+  - GRAPHITE
+  - GMMPHARM
+  - GALLANTT
+  - MANGALAM
+  - LINDEINDIA
+  - AIAENG
+  - PIIND
+  - UPL
+  - SRF
+  - COROMANDEL
+  - CHAMBLFERT
+  - GNFC
+  - GSFC
+  - FACT
+  - RCF
+  - ATUL
+  - FINEORG
+  - DEEPAKNTR
+  - AARTIIND
+  - NAVINFLUOR
+  - VINATIORGA
+  - TATACHEM
+  - DEEPAKFERT
+  - IOLCP
+  - TNPETRO
+  - GSPL
+  - JKPAPER
+  - BILT
+  - BALRAMCHIN
+  - DHAMPURSUG
+  - EIDPARRY
+  - BANNARI
+  - TRIVENI
+  - DWARIKESH
+  - SHREERENUKA
+  - MAGADSUGAR
+  - ANDHRSUGAR
+  - UTTAMSUGAR
+  - KCP
+  - BHARTIHEXCOM
+  - INDUSTOWER
+  - TATACOMM
+  - TEJASNET
+  - IDEA
+  - SITICABLE
+  - NETWORK18
+  - TV18BRDCST
+  - ZEEL
+  - PVRINOX
+  - INOXLEISUR
+  - SAREGAMA
+  - TIPSINDUST
+  - SUNTV
+  - HATHWAY
+  - DEN
+  - TVTODAY
+  - DBCORP
+  - RADIOCITY
+  - MIRZAINT
+  - ELENG
+  - AHCL
+  - LAXMIMACH
+  - BHELIND
+  - CUMMINSIND
+  - THERMAX
+  - ALLCARGO
+  - TCI
+  - TCIEXP
+  - CONTAINER
+  - CONCOR
+  - MAHSC
+  - ECLERX
+  - TVSSCS
+  - BLUECOAST
+  - JEEL
+  - WELENT
+  - AVADHSUGAR
+  - BAGASUGAR
+  - JPASSOCIAT
+  - GMRINFRA
+  - GMRPOWER
+  - GMRLOG
+  - IRB
+  - MEP
+  - UNITECH
+  - HINDUSTANCOPPER
+  - HINDCOPPER
+  - DICT
+  - DISHTV
+  - GENUSPAPER
+  - GENUSPOWER
+  - GHCL
+  - GILLETTE
+  - GIPCL
+  - GNA
+  - GODFRYPHLP
+  - GODREJAGRO
+  - GODREJIND
+  - GOCLCORP
+  - GPIL
+  - GREAVESCOT
+  - GUJALKALI
+  - AARTIDRUGS
+  - AARTIPHARM
+  - ABCAPITAL
+  - ABSLAMC
+  - AKZOINDIA
+  - ALEMBICLTD
+  - ALOKINDS
+  - AMBIPETRO
+  - APARINDS
+  - APLLTD
+  - APOLLO
+  - APOLLOHOSP
+  - ASAHIINDIA
+  - ASOKA
+  - ASTRAL
+  - ATFL
+  - AUBL
+  - AVANTIFEED
+  - BALARQ
+  - BALAXI
+  - BAJAJELEC
+  - BALKRISIND
+  - BALKRISHNA
+  - BALMLAWRIE
+  - BAYERCROP
+  - BBTC
+  - BDL
+  - BENGAL
+  - BLBLIMITED
+  - BLUESTARCO
+  - BUTTERFLY
+  - CANFINHOME
+  - CARBORUNIV
+  - CASTEXIND
+  - CEATLTD
+  - CENTRAL
+  - CENTURYPLY
+  - CENTURYTEX
+  - CERA
+  - CHEMPLAST
+  - CHENNPETRO
+  - CHOLAHLDNG
+  - CIGNITITEC
+  - CMRSL
+  - COCHINSHIP
+  - CRAFTSMAN
+  - CREATIVEYE
+  - CREDITACC
+  - CROMPTON
+  - CUBE
+  - CYBERMEDIA
+  - DALMIASUG
+  - DATAPATT
+  - DCAL
+  - DCMSRIND
+  - DEEPIND
+  - DELTACORP
+  - DHANI
+  - DHANUKA
+  - DBL
+  - DIXON
+  - DOLAT
+  - DOLPHIN
+  - DPWENDS
+  - DREDGINGCORP
+  - EASUNREY
+  - EDL
+  - EIHOTEL
+  - ELGIEQUIP
+  - ENGINERSIN
+  - EQUITAS
+  - ERIS
+  - ESCORTS
+  - ESSELPACK
+  - FCONSUMER
+  - FINCABLES
+  - FINPIPE
+  - FINOLEX
+  - GALAXY
+  - GATI
+  - GOLDEN
+  - HALF
+  - HAPPYFORGE
+  - HATSUN
+  - HEG
+  - HERITGFOOD
+  - HEXAWARE
+  - HONAUT
+  - HSCL
+  - ICIL
+  - IDFC
+  - IIFLCAPS
+  - INDHOTEL
+  - INDIACEM
+  - INDIANB
+  - INDOCO
+  - INDRAMEDCO
+  - INFIBEAM
+  - INGERRAND
+  - JBCHEPHARM
+  - JCHAL
+  - JINDALPOLY
+  - JINDALSAW
+  - JIOFIN
+  - JKLAKSHMI
+  - JKTYRE
+  - JTEKTINDIA
+  - JUBLINDS
+  - KANSAINER
+  - KEC
+  - KEI
+  - KEX
+  - KOTHARIPET
+  - KRBL
+  - KSERASERA
+  - L&TFH
+  - LAOPALA
+  - LICHFIN
+  - M&MFIN
+  - MASTEK
+  - MHRIL
+  - MINDTREE
+  - MOTHERSON
+  - MOTILALOFS
+  - MSSL
+  - NAM-INDIA
+  - NEEATA
+  - NILASPAC
+  - NOCIL
+  - OMAXE
+  - OPTIEMIT
+  - ORIENTBANK
+  - ORIENTELEC
+  - ORIENTREF
+  - PATANJALI
+  - PBFIN
+  - PFIZER
+  - PGHH
+  - PNBHOUSING
+  - PRINCEPIPE
+  - SELAN
+  - SHARDACROP
+  - SHIRRAM
+  - SHOPER
+  - SHOPTOP
+  - SIS
+  - SOLARINDS
+  - SONATSOFTW
+  - SPARC
+  - STAR
+  - SWANENERGY
+  - SYNDICATE
+  - TATACOFFEE
+  - TATAINVEST
+  - UNIONBANK
+  - VGUARD
+  - VIMT
+  - VIPIND
+  - VSTIND
+  - WELSPUNIND
+  - WENDT
+  - WHIRLPOOL
+  - ZODIAC
+  - ZUARI
+  - WOCKPHARM.BO
+  - RCOM.BO
+  - GTL.BO
+  - GTLINFRA.BO
+  - BOMDYEING.BO
+  - KOHINOOR.BO
+  - WIMPLAST.BO
+  - TWL.BO
+  - LLOYDS.BO
+  - GESHIP.BO
+  - ISGEC.BO
+  - MAZDOCK.BO
+  - BEML.BO
+  - TATAMETALI.BO
+  - TFCILTD.BO
+  - TATASTLP.BO
+
+# --- timeframes ------------------------------------------------------------
+swing_interval: "1d"
+swing_period: "2y"
+intraday_interval: "15m"
+intraday_period: "1mo"
+opening_range_bars: 6     # 6 x 15m = first 90 minutes as the opening range
+
+# --- LLM narration (all optional) ------------------------------------------
+# provider: none | ollama | groq | gemini
+# Numbers are ALWAYS computed in Python; the LLM only writes the explanation.
+llm_provider: none
+llm_model: "llama3.1"          # ollama model name; groq/gemini have their own
+ollama_host: "http://localhost:11434"
+
+# --- news / sentiment ------------------------------------------------------
+news_enabled: false        # needs `pip install feedparser`
+news_feeds:
+  - "https://www.moneycontrol.com/rss/marketreports.xml"
+  - "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"
+
+# --- journal ---------------------------------------------------------------
+journal_path: "trade_journal.db"
+
+# --- scan throttle ---------------------------------------------------------
+# Pause between symbols when scanning yfinance, to avoid IP rate-limits.
+# 0.5s is the safe default; raise it if Yahoo starts blocking you.
+# With ~2000 symbols this means a full scan takes ~17 minutes minimum.
+scan_delay_sec: 0.5

@@ -1,0 +1,431 @@
+{% extends "base.html" %}
+{% block title %}Strategy Lab{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold mb-2">Strategy Lab</h1>
+    <p class="text-slate-400">6 backtested strategies from quantifiedstrategies.com + sector rotation overlay from Zerodha Varsity.</p>
+</div>
+
+<!-- TWO COLUMN: Strategy Backtest Results + Sector Rankings -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Strategy Backtest Summary -->
+    <div>
+        <h2 class="text-2xl font-bold mb-4">Strategy Backtest Results</h2>
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-5">
+            <p class="text-sm text-slate-400 mb-4">Each strategy was backtested on 10 NSE stocks over the last 5 years. Returns include 0.1% round-trip costs.</p>
+            <div id="strategies-loading" class="text-sm text-slate-400">
+                <span class="inline-block animate-pulse">↻ Loading backtest results...</span>
+            </div>
+            <div id="strategies-error" class="hidden text-sm text-accent-yellow"></div>
+            <div id="strategies-table" class="hidden overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-xs text-slate-400 uppercase">
+                        <tr>
+                            <th class="text-left py-2">Strategy</th>
+                            <th class="text-right py-2">Avg Ret</th>
+                            <th class="text-right py-2">Alpha</th>
+                            <th class="text-right py-2">Win%</th>
+                            <th class="text-right py-2">PF</th>
+                            <th class="text-right py-2">Trades</th>
+                        </tr>
+                    </thead>
+                    <tbody id="strategies-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sector Rankings -->
+    <div>
+        <h2 class="text-2xl font-bold mb-4">Sector Rotation (Top-Down)</h2>
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-5">
+            <p class="text-sm text-slate-400 mb-2">Nifty sector indices ranked by weighted momentum (50% 1m, 30% 3m, 20% 6m).</p>
+            <p class="text-xs text-slate-500 mb-4">Last refresh: <span id="sector-refresh" class="mono">—</span></p>
+            <div id="sector-loading" class="text-sm text-slate-400">
+                <span class="inline-block animate-pulse">↻ Loading sector data...</span>
+            </div>
+            <div id="sector-error" class="hidden text-sm text-accent-yellow"></div>
+            <div id="sector-table" class="hidden overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-xs text-slate-400 uppercase">
+                        <tr>
+                            <th class="text-left py-2">#</th>
+                            <th class="text-left py-2">Sector</th>
+                            <th class="text-right py-2">Momentum</th>
+                            <th class="text-right py-2">1M</th>
+                            <th class="text-right py-2">3M</th>
+                            <th class="text-right py-2">6M</th>
+                            <th class="text-center py-2">Bias</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sector-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Per-Stock Strategy Signals -->
+<div class="mb-8">
+    <h2 class="text-2xl font-bold mb-4">Live Strategy Signals</h2>
+    <div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-4">
+        <form id="signal-form" class="flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-[200px]">
+                <label class="text-xs text-slate-400 uppercase">Symbol</label>
+                <input type="text" name="symbol" placeholder="RELIANCE" required value="RELIANCE"
+                       class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono uppercase focus:outline-none focus:border-accent-blue">
+            </div>
+            <button type="submit" class="px-5 py-2 bg-accent-blue hover:bg-blue-600 text-white rounded-lg font-medium">
+                Get Signals
+            </button>
+        </form>
+    </div>
+    <div id="signals-result" class="hidden">
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-bold" id="signal-symbol">—</h3>
+                <div class="text-sm text-slate-400">
+                    Price: <span class="mono font-bold text-slate-200" id="signal-price">—</span>
+                    <span class="text-slate-500 ml-2" id="signal-date">—</span>
+                </div>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" id="signals-grid"></div>
+
+        <!-- Sector context for this stock -->
+        <div id="stock-sector-context" class="hidden mt-4 bg-bg-card rounded-xl border border-accent-purple/30 p-5">
+            <h3 class="text-lg font-bold mb-2 flex items-center">
+                <span class="w-2 h-2 bg-accent-purple rounded-full mr-2"></span>
+                Sector Context (Top-Down)
+            </h3>
+            <div id="sector-context-content" class="text-sm text-slate-300"></div>
+        </div>
+    </div>
+</div>
+
+<!-- RL Agent Training -->
+<div class="mb-8">
+    <h2 class="text-2xl font-bold mb-4">Reinforcement Learning Agent</h2>
+    <div class="bg-bg-card rounded-xl border border-slate-700 p-5">
+        <p class="text-sm text-slate-400 mb-4">
+            Train a PPO agent on 10 liquid NSE stocks. Small runs (5&ndash;10k timesteps) are a smoke test;
+            production models use 100k+. The agent's opinion appears on each stock page under "RL Opinion".
+        </p>
+        <form id="rl-train-form" class="flex flex-wrap items-end gap-3 mb-4">
+            <div>
+                <label class="text-xs text-slate-400 uppercase">Timesteps</label>
+                <input type="number" name="timesteps" min="500" max="500000" step="500" value="10000"
+                       class="w-32 mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono focus:outline-none focus:border-accent-blue">
+            </div>
+            <label class="flex items-center gap-2 text-sm text-slate-300 pb-2">
+                <input type="checkbox" name="use_triple_barrier" class="accent-accent-blue">
+                Use triple-barrier reward shaping
+            </label>
+            <button type="submit" id="rl-train-btn"
+                    class="px-5 py-2 bg-accent-purple hover:bg-purple-600 text-white rounded-lg font-medium">
+                Train RL agent
+            </button>
+            <span id="rl-train-hint" class="text-xs text-slate-500">
+                ~1 min per 10k timesteps on CPU.
+            </span>
+        </form>
+        <div id="rl-train-panel" class="hidden">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                <span id="rl-train-status">idle</span>
+                <span class="mono"><span id="rl-train-elapsed">0.0</span>s</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded overflow-hidden">
+                <div id="rl-train-bar" class="h-full bg-accent-purple transition-all" style="width:0%"></div>
+            </div>
+            <div class="flex justify-between text-xs mt-1">
+                <span class="mono text-slate-400"><span id="rl-train-steps">0</span> / <span id="rl-train-target">0</span></span>
+                <span class="mono text-slate-400">last ep reward:
+                    <span id="rl-train-reward" class="text-slate-200">&mdash;</span>
+                </span>
+            </div>
+            <div id="rl-train-error" class="hidden mt-2 text-xs text-accent-red mono"></div>
+            <div id="rl-train-done" class="hidden mt-2 text-xs text-accent-green">
+                Training complete. Model saved.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Interpretation guide -->
+<div class="bg-bg-card rounded-xl border border-slate-700 p-6">
+    <h2 class="text-xl font-bold mb-3">How to read these results</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-300">
+        <div>
+            <h4 class="font-bold text-accent-blue mb-2">Strategy Backtest</h4>
+            <ul class="space-y-1 text-xs">
+                <li><b>Avg Ret:</b> Mean return across 10 stocks over 5 years.</li>
+                <li><b>Alpha:</b> Strategy return minus buy-and-hold return. Positive = strategy beat holding the stock.</li>
+                <li><b>Win%:</b> Percentage of trades that were profitable.</li>
+                <li><b>PF:</b> Profit factor = sum of wins / sum of losses. &gt;1 = profitable.</li>
+                <li><b>Trades:</b> Average number of trades per stock over the period.</li>
+            </ul>
+        </div>
+        <div>
+            <h4 class="font-bold text-accent-purple mb-2">Sector Rotation</h4>
+            <ul class="space-y-1 text-xs">
+                <li><b>Momentum:</b> Weighted avg of 1m/3m/6m returns. Higher = stronger sector.</li>
+                <li><b>Bias:</b> BULLISH (top 1/3), NEUTRAL (middle), BEARISH (bottom 1/3).</li>
+                <li><b>Use:</b> Favor longs in BULLISH sectors, avoid new longs in BEARISH sectors.</li>
+                <li><b>Source:</b> Inspired by Zerodha Varsity's top-down vs bottom-up article.</li>
+            </ul>
+        </div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500">
+        <b>Sources:</b>
+        <a href="https://www.quantifiedstrategies.com/trading-strategies/" class="text-accent-blue hover:underline" target="_blank">quantifiedstrategies.com</a> ·
+        <a href="https://zerodha.com/varsity/chapter/top-down-versus-bottom-up-stock-picking-strategies/" class="text-accent-blue hover:underline" target="_blank">Zerodha Varsity</a>.
+        Backtests include 0.1% round-trip costs. Past performance does not guarantee future results.
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load strategy backtest results
+async function loadStrategies() {
+    try {
+        const res = await fetch('/api/strategy_lab');
+        const data = await res.json();
+        document.getElementById('strategies-loading').classList.add('hidden');
+        if (!data.available) {
+            document.getElementById('strategies-error').textContent = data.error;
+            document.getElementById('strategies-error').classList.remove('hidden');
+            return;
+        }
+        const tbody = document.getElementById('strategies-tbody');
+        tbody.innerHTML = '';
+        for (const [key, strat] of Object.entries(data.strategies)) {
+            const s = strat.summary;
+            const row = document.createElement('tr');
+            row.className = 'border-t border-slate-700 hover:bg-slate-800/30';
+            row.innerHTML = `
+                <td class="py-2">
+                    <div class="font-semibold">${strat.name}</div>
+                    <div class="text-xs text-slate-500">${strat.description}</div>
+                </td>
+                <td class="text-right mono ${s.avg_return_pct >= 0 ? 'text-accent-green' : 'text-accent-red'}">${s.avg_return_pct > 0 ? '+' : ''}${s.avg_return_pct}%</td>
+                <td class="text-right mono ${s.avg_alpha_vs_bh >= 0 ? 'text-accent-green' : 'text-accent-red'}">${s.avg_alpha_vs_bh > 0 ? '+' : ''}${s.avg_alpha_vs_bh}%</td>
+                <td class="text-right mono">${s.avg_win_rate}%</td>
+                <td class="text-right mono ${s.avg_profit_factor >= 1 ? 'text-accent-green' : 'text-accent-red'}">${s.avg_profit_factor}</td>
+                <td class="text-right mono">${s.avg_n_trades}</td>
+            `;
+            tbody.appendChild(row);
+        }
+        document.getElementById('strategies-table').classList.remove('hidden');
+    } catch (e) {
+        document.getElementById('strategies-loading').classList.add('hidden');
+        document.getElementById('strategies-error').textContent = 'Network error: ' + e.message;
+        document.getElementById('strategies-error').classList.remove('hidden');
+    }
+}
+
+// Load sector rankings
+async function loadSectors() {
+    try {
+        const res = await fetch('/api/sector_rankings');
+        const data = await res.json();
+        document.getElementById('sector-loading').classList.add('hidden');
+        if (!data.available) {
+            document.getElementById('sector-error').textContent = data.error;
+            document.getElementById('sector-error').classList.remove('hidden');
+            return;
+        }
+        document.getElementById('sector-refresh').textContent = data.last_refresh || 'unknown';
+        const tbody = document.getElementById('sector-tbody');
+        tbody.innerHTML = '';
+        const n = data.sectors.length;
+        data.sectors.forEach(s => {
+            let bias = 'NEUTRAL';
+            let biasClass = 'text-slate-400 bg-slate-800/30';
+            if (s.rank <= n / 3) {
+                bias = 'BULLISH';
+                biasClass = 'text-accent-green bg-accent-green/20';
+            } else if (s.rank > 2 * n / 3) {
+                bias = 'BEARISH';
+                biasClass = 'text-accent-red bg-accent-red/20';
+            }
+            const row = document.createElement('tr');
+            row.className = 'border-t border-slate-700 hover:bg-slate-800/30';
+            row.innerHTML = `
+                <td class="py-2 mono text-slate-400">${s.rank}</td>
+                <td class="py-2 font-semibold">${s.sector}</td>
+                <td class="text-right mono ${s.momentum_score >= 0 ? 'text-accent-green' : 'text-accent-red'} font-bold">${s.momentum_score > 0 ? '+' : ''}${s.momentum_score}%</td>
+                <td class="text-right mono ${s.return_1m >= 0 ? 'text-accent-green' : 'text-accent-red'}">${s.return_1m > 0 ? '+' : ''}${s.return_1m}%</td>
+                <td class="text-right mono ${s.return_3m >= 0 ? 'text-accent-green' : 'text-accent-red'}">${s.return_3m > 0 ? '+' : ''}${s.return_3m}%</td>
+                <td class="text-right mono ${s.return_6m >= 0 ? 'text-accent-green' : 'text-accent-red'}">${s.return_6m > 0 ? '+' : ''}${s.return_6m}%</td>
+                <td class="text-center"><span class="px-2 py-1 text-xs rounded mono ${biasClass}">${bias}</span></td>
+            `;
+            tbody.appendChild(row);
+        });
+        document.getElementById('sector-table').classList.remove('hidden');
+    } catch (e) {
+        document.getElementById('sector-loading').classList.add('hidden');
+        document.getElementById('sector-error').textContent = 'Network error: ' + e.message;
+        document.getElementById('sector-error').classList.remove('hidden');
+    }
+}
+
+// Load signals for a stock
+async function loadSignals(symbol) {
+    try {
+        const [sigRes, secRes] = await Promise.all([
+            fetch(`/api/strategy_signals/${symbol}`),
+            fetch(`/api/sector_context/${symbol}`).catch(() => ({json: async () => ({available: false})})),
+        ]);
+        const sigData = await sigRes.json();
+        const secData = await secRes.json();
+
+        if (sigData.error) {
+            alert(sigData.error);
+            return;
+        }
+
+        document.getElementById('signal-symbol').textContent = sigData.symbol;
+        document.getElementById('signal-price').textContent = '₹' + sigData.current_price.toFixed(2);
+        document.getElementById('signal-date').textContent = sigData.as_of;
+
+        // Build signal cards
+        const grid = document.getElementById('signals-grid');
+        grid.innerHTML = '';
+        const signalColors = {BUY: 'text-accent-green', SELL: 'text-accent-red', HOLD: 'text-slate-400'};
+        const signalBg = {BUY: 'bg-accent-green/10 border-accent-green/30', SELL: 'bg-accent-red/10 border-accent-red/30', HOLD: 'bg-slate-800/30 border-slate-700'};
+        for (const [key, strat] of Object.entries(sigData.signals)) {
+            const card = document.createElement('div');
+            card.className = `rounded-lg border p-4 ${signalBg[strat.signal] || signalBg.HOLD}`;
+            card.innerHTML = `
+                <div class="flex items-center justify-between mb-1">
+                    <div class="font-bold text-sm">${strat.name}</div>
+                    <div class="text-lg font-bold mono ${signalColors[strat.signal] || signalColors.HOLD}">${strat.signal}</div>
+                </div>
+                <div class="text-xs text-slate-400">${strat.description}</div>
+                <div class="text-xs text-slate-500 mt-1">Source: ${strat.source}</div>
+            `;
+            grid.appendChild(card);
+        }
+        document.getElementById('signals-result').classList.remove('hidden');
+
+        // Sector context
+        if (secData.available) {
+            const box = document.getElementById('stock-sector-context');
+            const content = document.getElementById('sector-context-content');
+            const biasColor = secData.bias === 'BULLISH' ? 'text-accent-green' :
+                              secData.bias === 'BEARISH' ? 'text-accent-red' : 'text-slate-300';
+            content.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                    <div><div class="text-xs text-slate-400 uppercase">Sector</div><div class="font-bold">${secData.sector}</div></div>
+                    <div><div class="text-xs text-slate-400 uppercase">Rank</div><div class="font-bold mono">#${secData.sector_rank} / ${secData.n_sectors}</div></div>
+                    <div><div class="text-xs text-slate-400 uppercase">Momentum</div><div class="font-bold mono ${secData.momentum_pct >= 0 ? 'text-accent-green' : 'text-accent-red'}">${secData.momentum_pct > 0 ? '+' : ''}${secData.momentum_pct}%</div></div>
+                    <div><div class="text-xs text-slate-400 uppercase">Bias</div><div class="font-bold ${biasColor}">${secData.bias}</div></div>
+                </div>
+                <div class="text-xs text-slate-400">${secData.explanation}</div>
+            `;
+            box.classList.remove('hidden');
+        } else {
+            document.getElementById('stock-sector-context').classList.add('hidden');
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
+
+document.getElementById('signal-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    loadSignals(e.target.symbol.value);
+});
+
+// ---------------- RL agent training ---------------- //
+let rlPollTimer = null;
+
+function renderRlStatus(s) {
+    document.getElementById('rl-train-panel').classList.remove('hidden');
+    const target = s.timesteps_target || 0;
+    const steps = s.timesteps || 0;
+    const pct = target > 0 ? Math.min(100, (steps / target) * 100) : 0;
+    document.getElementById('rl-train-bar').style.width = pct.toFixed(1) + '%';
+    document.getElementById('rl-train-steps').textContent = steps.toLocaleString();
+    document.getElementById('rl-train-target').textContent = target.toLocaleString();
+    document.getElementById('rl-train-elapsed').textContent = (s.elapsed_s || 0).toFixed(1);
+    document.getElementById('rl-train-reward').textContent =
+        (s.last_reward === null || s.last_reward === undefined) ? '—' : Number(s.last_reward).toFixed(2);
+
+    const statusEl = document.getElementById('rl-train-status');
+    if (s.running) {
+        statusEl.textContent = s.use_triple_barrier ? 'training (triple-barrier ON)…' : 'training…';
+        document.getElementById('rl-train-done').classList.add('hidden');
+    } else if (s.error) {
+        statusEl.textContent = 'error';
+    } else if (s.finished_at) {
+        statusEl.textContent = 'done';
+        document.getElementById('rl-train-done').classList.remove('hidden');
+    }
+
+    const errBox = document.getElementById('rl-train-error');
+    if (s.error) { errBox.textContent = s.error; errBox.classList.remove('hidden'); }
+    else { errBox.classList.add('hidden'); }
+
+    document.getElementById('rl-train-btn').disabled = !!s.running;
+    document.getElementById('rl-train-btn').classList.toggle('opacity-60', !!s.running);
+}
+
+async function pollRlStatus() {
+    try {
+        const res = await fetch('/api/rl/train_status');
+        const data = await res.json();
+        renderRlStatus(data);
+        if (!data.running && rlPollTimer) {
+            clearInterval(rlPollTimer);
+            rlPollTimer = null;
+        }
+    } catch (e) { /* keep polling */ }
+}
+
+document.getElementById('rl-train-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ts = parseInt(e.target.timesteps.value, 10) || 10000;
+    const useTb = e.target.use_triple_barrier.checked ? '1' : '0';
+    const btn = document.getElementById('rl-train-btn');
+    btn.disabled = true;
+    btn.classList.add('opacity-60');
+    document.getElementById('rl-train-done').classList.add('hidden');
+    document.getElementById('rl-train-error').classList.add('hidden');
+    try {
+        const res = await fetch(`/api/rl/train?timesteps=${ts}&use_triple_barrier=${useTb}`, {method: 'POST'});
+        const data = await res.json();
+        if (data.status === 'already_running' || data.status === 'started') {
+            if (!rlPollTimer) rlPollTimer = setInterval(pollRlStatus, 2000);
+            pollRlStatus();
+        } else {
+            alert('Unexpected response: ' + JSON.stringify(data));
+            btn.disabled = false;
+            btn.classList.remove('opacity-60');
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+        btn.disabled = false;
+        btn.classList.remove('opacity-60');
+    }
+});
+
+// If a training run is already in progress when the page loads, show it.
+pollRlStatus().then(() => {
+    // If it's running, start polling.
+    // (pollRlStatus already renders; check the DOM state.)
+    fetch('/api/rl/train_status').then(r => r.json()).then(d => {
+        if (d.running && !rlPollTimer) rlPollTimer = setInterval(pollRlStatus, 2000);
+    });
+});
+
+// Initial loads
+loadStrategies();
+loadSectors();
+// Auto-load RELIANCE signals on page load
+loadSignals('RELIANCE');
+</script>
+{% endblock %}

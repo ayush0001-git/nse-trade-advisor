@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-06-22T11:20:42",
+  "summary": {
+    "passed": 39,
+    "failed": 0,
+    "warnings": 0
+  },
+  "errors": [],
+  "warnings": [],
+  "suggestions": {
+    "knowledge": [
+      "Connect brain.py to ChromaDB (1,957 docs already indexed) for semantic search instead of keyword matching",
+      "Load rules from knowledge/ Markdown files at startup instead of hardcoding",
+      "Store every analysis result in trade_memory for learning from past setups"
+    ],
+    "rag": [
+      "brain.py should query ChromaDB for context-aware knowledge retrieval",
+      "Query RAG with stock context (direction + regime + R:R) to get relevant rules",
+      "Add structured data (news reactions, trade examples) to the RAG system"
+    ],
+    "llm": [
+      "Use LLM (Groq/Gemini/Ollama) to write natural-language explanations instead of templates",
+      "Show RAG-retrieved knowledge rules alongside the score for transparency",
+      "Add chat interface for natural language Q&A about stock recommendations"
+    ],
+    "precision": [
+      "Learn optimal scoring weights from backtested results (logistic regression)",
+      "Use actual data sources (news_intel, social_sentiment, institutional_flow, options_flow) instead of proxies",
+      "Add multi-timeframe analysis (weekly + daily + 15m) like deep_analysis.py",
+      "Backtest the scoring system itself: 'if score > 75, buy, hold 30 days, measure return'"
+    ]
+  }
+}

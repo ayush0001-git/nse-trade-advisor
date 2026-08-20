@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Run Scan{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold mb-2">Run a Scan</h1>
+    <p class="text-slate-400">Analyze every stock in your watchlist. Results are saved and shown on the dashboard.</p>
+</div>
+
+<div class="max-w-3xl">
+    <!-- Scan config -->
+    <div class="bg-bg-card rounded-xl border border-slate-700 p-6 mb-6">
+        <h2 class="text-xl font-bold mb-4">Scan Configuration</h2>
+        <form id="scan-form" class="space-y-4">
+            <div>
+                <label class="text-xs text-slate-400 uppercase">Symbols to scan (comma-separated, or leave blank for full watchlist)</label>
+                <textarea name="symbols" rows="3" placeholder="RELIANCE, TCS, INFY, SBIN  (or leave blank for all {{ watchlist_size|default('') }} watchlist stocks)"
+                          class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono focus:outline-none focus:border-accent-blue"></textarea>
+                <p class="text-xs text-slate-500 mt-1">Tip: scanning more than 100 stocks takes several minutes due to Yahoo's rate limit.</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button type="submit" id="scan-submit"
+                        class="px-6 py-2.5 bg-accent-green hover:bg-green-600 text-white rounded-lg font-medium">
+                    ▶ Start Scan
+                </button>
+                <button type="button" id="scan-stop" class="hidden px-6 py-2.5 bg-accent-red text-white rounded-lg font-medium">
+                    Stop
+                </button>
+                <a href="/" class="px-4 py-2.5 text-slate-400 hover:text-white">← Back to Dashboard</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Progress -->
+    <div id="scan-progress" class="hidden bg-bg-card rounded-xl border border-slate-700 p-6 mb-6">
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <div class="w-3 h-3 bg-accent-green rounded-full mr-3 pulse-live"></div>
+            Scanning in progress...
+        </h2>
+        <div class="mb-4">
+            <div class="flex justify-between text-sm mb-2">
+                <span class="text-slate-400">Progress</span>
+                <span class="mono font-bold" id="progress-text">0 / 0</span>
+            </div>
+            <div class="h-3 bg-slate-700 rounded-full overflow-hidden">
+                <div id="progress-fill" class="h-full bg-gradient-to-r from-accent-green to-accent-blue progress-bar-fill" style="width: 0%"></div>
+            </div>
+        </div>
+        <div class="text-sm text-slate-400 mb-2">
+            Currently analyzing: <span class="mono text-slate-200" id="current-symbol">—</span>
+        </div>
+        <div class="text-xs text-slate-500">
+            Started: <span class="mono" id="scan-started">—</span>
+        </div>
+    </div>
+
+    <!-- Completed -->
+    <div id="scan-done" class="hidden bg-bg-card rounded-xl border border-slate-700 p-6 mb-6">
+        <h2 class="text-xl font-bold mb-4 text-accent-green">✓ Scan Complete</h2>
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <div>
+                <div class="text-xs text-slate-400 uppercase">Completed</div>
+                <div class="text-2xl font-bold mono" id="done-completed">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase">Failures</div>
+                <div class="text-2xl font-bold mono text-accent-red" id="done-failures">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase">Duration</div>
+                <div class="text-2xl font-bold mono" id="done-duration">—</div>
+            </div>
+        </div>
+        <a href="/" class="inline-block px-4 py-2 bg-accent-blue hover:bg-blue-600 text-white rounded-lg text-sm font-medium">
+            View Results on Dashboard →
+        </a>
+    </div>
+
+    <!-- Failures list -->
+    <div id="scan-failures" class="hidden bg-bg-card rounded-xl border border-slate-700 p-6">
+        <h3 class="text-lg font-bold mb-3 text-accent-yellow">⚠ Symbols that failed</h3>
+        <div id="failures-list" class="space-y-1 text-sm text-slate-300 max-h-60 overflow-y-auto"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pollInterval = null;
+
+async function startScan(symbols) {
+    const payload = symbols ? { symbols: symbols } : {};
+    const res = await fetch('/api/scan/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.status === 'already_running') {
+        alert('A scan is already running. Wait for it to finish.');
+    }
+    document.getElementById('scan-submit').disabled = true;
+    document.getElementById('scan-submit').classList.add('opacity-50');
+    document.getElementById('scan-progress').classList.remove('hidden');
+    pollInterval = setInterval(pollStatus, 1000);
+}
+
+async function pollStatus() {
+    try {
+        const res = await fetch('/api/scan/status');
+        const data = await res.json();
+
+        if (data.running) {
+            document.getElementById('progress-fill').style.width =
+                `${(data.progress / data.total * 100).toFixed(1)}%`;
+            document.getElementById('progress-text').textContent = `${data.progress} / ${data.total}`;
+            document.getElementById('current-symbol').textContent = data.current_symbol;
+            if (data.started_at) {
+                document.getElementById('scan-started').textContent = data.started_at;
+            }
+        } else {
+            // Scan finished
+            clearInterval(pollInterval);
+            document.getElementById('scan-progress').classList.add('hidden');
+            document.getElementById('scan-done').classList.remove('hidden');
+            document.getElementById('done-completed').textContent = data.completed || 0;
+            document.getElementById('done-failures').textContent = (data.failures || []).length;
+
+            // Duration
+            if (data.started_at && data.finished_at) {
+                const start = new Date(data.started_at);
+                const end = new Date(data.finished_at);
+                const mins = Math.floor((end - start) / 60000);
+                const secs = Math.floor(((end - start) % 60000) / 1000);
+                document.getElementById('done-duration').textContent = `${mins}m ${secs}s`;
+            }
+
+            // Show failures
+            if (data.failures && data.failures.length > 0) {
+                const list = document.getElementById('failures-list');
+                list.innerHTML = data.failures.map(f =>
+                    `<div class="mono text-xs"><span class="text-accent-red">${f.symbol}</span>: ${f.error}</div>`
+                ).join('');
+                document.getElementById('scan-failures').classList.remove('hidden');
+            }
+
+            // Re-enable the button
+            document.getElementById('scan-submit').disabled = false;
+            document.getElementById('scan-submit').classList.remove('opacity-50');
+        }
+    } catch (e) {
+        console.error('Poll error:', e);
+    }
+}
+
+document.getElementById('scan-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const symbolsText = e.target.symbols.value.trim();
+    let symbols = null;
+    if (symbolsText) {
+        symbols = symbolsText.split(',').map(s => s.trim()).filter(s => s);
+    }
+    startScan(symbols);
+});
+
+// Check if a scan is already running on page load
+(async () => {
+    try {
+        const res = await fetch('/api/scan/status');
+        const data = await res.json();
+        if (data.running) {
+            document.getElementById('scan-submit').disabled = true;
+            document.getElementById('scan-submit').classList.add('opacity-50');
+            document.getElementById('scan-progress').classList.remove('hidden');
+            pollInterval = setInterval(pollStatus, 1000);
+        }
+    } catch (e) {}
+})();
+</script>
+{% endblock %}

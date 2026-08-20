@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}Optimize · {{ symbol }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+        <a href="/backtest/{{ symbol }}" class="text-sm text-ink-muted hover:text-ink">← Back to backtest · {{ symbol }}</a>
+        <div class="flex items-center gap-4">
+            <a href="/backtest/walkforward/{{ symbol }}" class="text-sm text-accent-purple hover:text-ink font-medium">Walk-forward validate →</a>
+            <a href="/stock/{{ symbol }}" class="text-sm text-ink-muted hover:text-ink">Stock page →</a>
+        </div>
+    </div>
+    <h1 class="text-3xl font-bold headline tracking-tight mt-2">Optimize · {{ symbol }}</h1>
+    <p class="text-ink-muted text-sm">
+        Sweeps RSI thresholds and the ADX minimum against 5 years of daily bars to find
+        the combination that would have delivered the best Sharpe ratio. Grid: RSI-low
+        {35,40,45,50} × RSI-high {65,70,75,80} × ADX-min {15,20,25,30}, with the constraint
+        that RSI-low &lt; RSI-high.
+    </p>
+</div>
+
+<div id="opt-loading" class="surface p-8 text-center">
+    <div class="text-lg text-ink-muted">
+        <span class="inline-block animate-pulse">↻</span> Sweeping parameter combinations on {{ symbol }}...
+    </div>
+    <div class="text-xs text-ink-dim mt-2 mono">This takes 20–60 s (one full 5y backtest per combo).</div>
+</div>
+
+<div id="opt-error" class="hidden surface p-6 border border-accent-red/40">
+    <h2 class="text-lg font-bold text-accent-red mb-2">Optimization failed</h2>
+    <pre id="opt-error-body" class="text-xs mono text-accent-red whitespace-pre-wrap"></pre>
+</div>
+
+<div id="opt-result" class="hidden space-y-6">
+
+    <!-- Winner tile -->
+    <div id="opt-winner" class="surface p-6"></div>
+
+    <!-- Overfitting warning -->
+    <div id="opt-warn" class="hidden surface p-4 border border-accent-yellow/40">
+        <div class="text-sm text-accent-yellow"><span class="font-bold">Low sample size:</span> the best combo triggered fewer than 10 trades. High overfitting risk — treat as suggestion, not gospel.</div>
+    </div>
+
+    <!-- Baseline vs Best table -->
+    <div class="surface p-6">
+        <h2 class="text-lg font-bold mb-1">Baseline vs Best</h2>
+        <p class="text-xs text-ink-dim mb-4 mono" id="opt-range">—</p>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-[10px] uppercase tracking-widest text-ink-dim mono">
+                    <tr class="border-b border-border">
+                        <th class="text-left py-2 px-2">Metric</th>
+                        <th class="text-right py-2 px-2">Baseline (defaults)</th>
+                        <th class="text-right py-2 px-2">Best combo</th>
+                        <th class="text-right py-2 px-2">Δ</th>
+                    </tr>
+                </thead>
+                <tbody id="opt-cmp-body"></tbody>
+            </table>
+        </div>
+        <div class="text-xs text-ink-dim mono mt-3" id="opt-meta">—</div>
+    </div>
+
+    <!-- Heatmap -->
+    <div class="surface p-6">
+        <h2 class="text-lg font-bold mb-1">Sharpe heatmap</h2>
+        <p class="text-xs text-ink-dim mb-4 mono">
+            Rows: RSI-low · Cols: RSI-high · mean Sharpe aggregated across ADX-min values.
+            Green = higher Sharpe, red = negative, dim = weak.
+        </p>
+        <div class="overflow-x-auto">
+            <canvas id="heatmap" height="260"></canvas>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(async () => {
+    const err = document.getElementById('opt-error');
+    const loading = document.getElementById('opt-loading');
+    const result = document.getElementById('opt-result');
+    try {
+        const res = await fetch('/api/backtest/optimize/{{ symbol }}');
+        const data = await res.json();
+        loading.classList.add('hidden');
+        if (!res.ok) {
+            document.getElementById('opt-error-body').textContent = data.error + '\n\n' + (data.traceback || '');
+            err.classList.remove('hidden');
+            return;
+        }
+        renderResult(data);
+        result.classList.remove('hidden');
+    } catch (e) {
+        loading.classList.add('hidden');
+        document.getElementById('opt-error-body').textContent = 'Network error: ' + e.message;
+        err.classList.remove('hidden');
+    }
+})();
+
+function fmt(v, decimals = 2, suffix = '') {
+    if (v === null || v === undefined || Number.isNaN(v)) return '—';
+    return v.toFixed(decimals) + suffix;
+}
+function fmtPct(v) { if (v === null || v === undefined) return '—'; const s = v >= 0 ? '+' : ''; return s + v.toFixed(2) + '%'; }
+function fmtInt(v) { return v === null || v === undefined ? '—' : Math.round(v).toLocaleString('en-IN'); }
+function colorFor(v, invert = false) {
+    if (v === null || v === undefined) return 'text-ink-dim';
+    const good = invert ? v < 0 : v > 0;
+    return good ? 'text-accent-green' : 'text-accent-red';
+}
+
+function renderResult(d) {
+    const best = d.best || {};
+    const base = d.baseline || {};
+
+    // --- Winner tile ---
+    const winnerBox = document.getElementById('opt-winner');
+    const sharpeGood = best.sharpe !== null && best.sharpe > 0;
+    const color = sharpeGood ? 'text-accent-green' : 'text-accent-yellow';
+    winnerBox.innerHTML = `
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Winner · 5-year Sharpe-maximizing combo</div>
+                <h2 class="text-2xl font-bold ${color} mt-1">
+                    Best combo: RSI ${best.rsi_low}–${best.rsi_high}, ADX ≥ ${best.adx_min}
+                </h2>
+            </div>
+            <div class="text-right text-sm text-ink-muted">
+                <div>Sharpe: <span class="mono font-bold ${colorFor(best.sharpe)}">${fmt(best.sharpe)}</span></div>
+                <div>Return: <span class="mono font-bold ${colorFor(best.return_pct)}">${fmtPct(best.return_pct)}</span></div>
+                <div>Trades: <span class="mono font-bold text-ink">${fmtInt(best.trades)}</span></div>
+            </div>
+        </div>
+        <p class="text-sm text-ink-muted mt-3">
+            This combination scored highest by Sharpe ratio across the sweep. The class defaults
+            were RSI 45–70, ADX ≥ 20 — so the delta below is what you'd have gained by
+            using these tuned thresholds instead.
+        </p>`;
+
+    // --- Overfitting warning ---
+    if ((best.trades || 0) < 10) {
+        document.getElementById('opt-warn').classList.remove('hidden');
+    }
+
+    // --- Comparison table ---
+    document.getElementById('opt-range').textContent =
+        `${d.start} → ${d.end} · ${d.bars} bars · method: ${d.method_used} · ${d.attempts} valid combos`;
+    document.getElementById('opt-meta').textContent =
+        `Improvement in Sharpe: ${fmt(d.improvement_sharpe)} · Improvement in Return: ${fmtPct(d.improvement_return_pct)}`;
+
+    const rows = [
+        {label: 'Sharpe Ratio', base: base.sharpe, best: best.sharpe, fmt: fmt},
+        {label: 'Return', base: base.return_pct, best: best.return_pct, fmt: fmtPct},
+        {label: 'Trades', base: base.trades, best: best.trades, fmt: fmtInt},
+        {label: 'Win Rate', base: base.win_rate_pct, best: best.win_rate_pct,
+         fmt: v => v === null || v === undefined ? '—' : v.toFixed(1) + '%'},
+        {label: 'Max Drawdown', base: base.max_drawdown_pct, best: best.max_drawdown_pct, fmt: fmtPct},
+    ];
+    document.getElementById('opt-cmp-body').innerHTML = rows.map(r => {
+        const delta = (r.best !== null && r.best !== undefined && r.base !== null && r.base !== undefined)
+            ? (r.best - r.base) : null;
+        const deltaColor = delta === null ? 'text-ink-dim'
+            : (r.label === 'Max Drawdown' ? (delta >= 0 ? 'text-accent-green' : 'text-accent-red')
+                                          : (delta >= 0 ? 'text-accent-green' : 'text-accent-red'));
+        const deltaTxt = delta === null ? '—' :
+            (r.label === 'Return' || r.label === 'Max Drawdown' ? (delta >= 0 ? '+' : '') + delta.toFixed(2) + '%'
+                : (delta >= 0 ? '+' : '') + delta.toFixed(2));
+        return `<tr class="border-t border-border">
+            <td class="py-2 px-2 text-ink">${r.label}</td>
+            <td class="py-2 px-2 text-right mono text-ink-muted">${r.fmt(r.base)}</td>
+            <td class="py-2 px-2 text-right mono font-bold">${r.fmt(r.best)}</td>
+            <td class="py-2 px-2 text-right mono ${deltaColor}">${deltaTxt}</td>
+        </tr>`;
+    }).join('');
+
+    // --- Heatmap ---
+    drawHeatmap(d.heatmap, d.grid);
+}
+
+function drawHeatmap(cells, grid) {
+    const canvas = document.getElementById('heatmap');
+    const rows = (grid && grid.rsi_low)  || [35, 40, 45, 50];
+    const cols = (grid && grid.rsi_high) || [65, 70, 75, 80];
+
+    // Build lookup
+    const lookup = {};
+    let maxAbs = 0.001;
+    (cells || []).forEach(c => {
+        lookup[c.rsi_low + ':' + c.rsi_high] = c.sharpe;
+        if (c.sharpe !== null && Math.abs(c.sharpe) > maxAbs) maxAbs = Math.abs(c.sharpe);
+    });
+
+    const dpr = window.devicePixelRatio || 1;
+    const padL = 90, padT = 40, padR = 20, padB = 20;
+    const cellW = 90, cellH = 46;
+    const w = padL + cellW * cols.length + padR;
+    const h = padT + cellH * rows.length + padB;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    // Column headers (RSI-high)
+    ctx.fillStyle = '#8a95b0';
+    ctx.font = '11px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('RSI-high →', padL + cellW * cols.length / 2, padT / 2 - 8);
+    cols.forEach((c, j) => {
+        ctx.fillStyle = '#8a95b0';
+        ctx.fillText(String(c), padL + cellW * j + cellW / 2, padT / 2 + 8);
+    });
+
+    // Row headers (RSI-low)
+    ctx.textAlign = 'right';
+    ctx.save();
+    ctx.translate(padL / 2 - 30, padT + cellH * rows.length / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8a95b0';
+    ctx.fillText('RSI-low ↓', 0, 0);
+    ctx.restore();
+
+    rows.forEach((r, i) => {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#8a95b0';
+        ctx.fillText(String(r), padL - 10, padT + cellH * i + cellH / 2);
+    });
+
+    // Cells
+    rows.forEach((r, i) => {
+        cols.forEach((c, j) => {
+            const x = padL + cellW * j;
+            const y = padT + cellH * i;
+            const val = lookup[r + ':' + c];
+            let fill = '#1a2340';   // dim / missing
+            let stroke = '#2b3860';
+            let textColor = '#8a95b0';
+            let txt = '—';
+            if (r >= c) {
+                // Invalid (rsi_low >= rsi_high)
+                fill = '#141a2e';
+                txt = '∅';
+            } else if (val === null || val === undefined || Number.isNaN(val)) {
+                txt = 'n/a';
+            } else {
+                const norm = Math.max(-1, Math.min(1, val / maxAbs));
+                const alpha = (0.15 + 0.75 * Math.abs(norm)).toFixed(2);
+                if (val > 0) {
+                    fill = `rgba(34,211,138,${alpha})`;
+                } else {
+                    fill = `rgba(255,91,111,${alpha})`;
+                }
+                textColor = Math.abs(norm) > 0.55 ? '#e6ecff' : '#c8d0e4';
+                txt = val.toFixed(2);
+            }
+            ctx.fillStyle = fill;
+            ctx.fillRect(x + 2, y + 2, cellW - 4, cellH - 4);
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4);
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 12px JetBrains Mono, monospace';
+            ctx.fillText(txt, x + cellW / 2, y + cellH / 2);
+        });
+    });
+}
+</script>
+{% endblock %}

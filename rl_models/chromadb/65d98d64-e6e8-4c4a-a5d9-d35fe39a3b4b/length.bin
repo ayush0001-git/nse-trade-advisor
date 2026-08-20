@@ -1,0 +1,8 @@
+PATTERN: Falling Wedge
+CATEGORY: reversal
+TIMEFRAME: daily
+DEFINITION: Lower highs and lower lows, converging with highs falling faster - loss of downside thrust.
+WHEN IT FIRES: Bullish reversal - trigger on close above the upper trendline.
+RELIABILITY: Moderate to high after downtrends.
+FALSE POSITIVES: In strong bear phases falling wedges break down cleanly.
+EXAMPLE: NIFTY 2022-06 bottom. flag.ÿ

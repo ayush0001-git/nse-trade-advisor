@@ -1,0 +1,8 @@
+{
+  "capital": 20000.0,
+  "risk_pct": 0.01,
+  "target_profit": 500.0,
+  "hold_days": 3,
+  "style": "swing",
+  "cash_only": false
+}

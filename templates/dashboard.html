@@ -1,0 +1,836 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+{# ============================================================== #}
+{#  ONBOARDING: shown when no plan saved                            #}
+{# ============================================================== #}
+{% if not prefs or not prefs.capital %}
+<div class="mb-10">
+    <div class="text-center max-w-3xl mx-auto mb-8">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent-blue/10 border border-accent-blue/30 mb-4">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent-blue pulse-live"></span>
+            <span class="text-xs uppercase tracking-widest text-accent-blue mono">Setup · Step 1 of 1</span>
+        </div>
+        <h1 class="text-4xl md:text-5xl font-bold headline tracking-tight mb-3">Build your trade plan</h1>
+        <p class="text-ink-muted text-base md:text-lg">
+            The advisor sizes every setup to your capital, refuses trades below 2:1 reward-to-risk, and only surfaces opportunities that fit the time horizon you can hold for.
+        </p>
+    </div>
+
+    <form id="plan-form" class="surface p-6 md:p-8 max-w-4xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <!-- Capital -->
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="w-6 h-6 rounded-md bg-accent-green/10 text-accent-green flex items-center justify-center text-xs font-bold">₹</span>
+                    <label class="text-sm font-semibold text-ink">Capital</label>
+                </div>
+                <p class="text-xs text-ink-muted mb-2">Total money available to trade with.</p>
+                <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-ink-dim mono">₹</span>
+                    <input type="number" name="capital" required min="1000" step="1000"
+                           placeholder="e.g. 50000"
+                           class="w-full pl-8 pr-4 py-3 bg-bg-sub border border-border rounded-lg text-lg font-bold mono">
+                </div>
+            </div>
+
+            <!-- Risk % -->
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="w-6 h-6 rounded-md bg-accent-yellow/10 text-accent-yellow flex items-center justify-center text-xs font-bold">%</span>
+                    <label class="text-sm font-semibold text-ink">Max risk per trade</label>
+                </div>
+                <p class="text-xs text-ink-muted mb-2">Loss you accept on one bad trade. 1–2% is the sane range.</p>
+                <select name="risk_pct" required
+                        class="w-full px-4 py-3 bg-bg-sub border border-border rounded-lg text-lg font-bold mono">
+                    <option value="0.005">0.5% — very conservative</option>
+                    <option value="0.01" selected>1% — recommended</option>
+                    <option value="0.02">2% — aggressive</option>
+                    <option value="0.03">3% — high risk</option>
+                    <option value="0.05">5% — reckless (not advised)</option>
+                </select>
+            </div>
+
+            <!-- Target profit -->
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="w-6 h-6 rounded-md bg-accent-blue/10 text-accent-blue flex items-center justify-center text-xs font-bold">◎</span>
+                    <label class="text-sm font-semibold text-ink">Target profit per trade</label>
+                </div>
+                <p class="text-xs text-ink-muted mb-2">Rupee gain you aim for. Setups whose reward matches this goal get highlighted.</p>
+                <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-ink-dim mono">₹</span>
+                    <input type="number" name="target_profit" required min="50" step="50"
+                           placeholder="e.g. 1000"
+                           class="w-full pl-8 pr-4 py-3 bg-bg-sub border border-border rounded-lg text-lg font-bold mono">
+                </div>
+            </div>
+
+            <!-- Holding days -->
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="w-6 h-6 rounded-md bg-accent-purple/10 text-accent-purple flex items-center justify-center text-xs font-bold">⏱</span>
+                    <label class="text-sm font-semibold text-ink">Holding period</label>
+                </div>
+                <p class="text-xs text-ink-muted mb-2">How long you can leave the money in a position. 1 = intraday.</p>
+                <select name="hold_days" required
+                        class="w-full px-4 py-3 bg-bg-sub border border-border rounded-lg text-lg font-bold mono">
+                    <option value="1">1 day — intraday</option>
+                    <option value="3" selected>2–3 days — short swing</option>
+                    <option value="7">4–7 days — week swing</option>
+                    <option value="14">1–2 weeks — swing</option>
+                    <option value="30">up to a month — position</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-border">
+            <label class="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-bg-sub transition-colors">
+                <input type="checkbox" name="cash_only" checked
+                       class="mt-1 w-4 h-4 rounded border-border bg-bg-sub accent-accent-blue">
+                <div>
+                    <div class="text-sm font-semibold text-ink">Cash equity only (recommended)</div>
+                    <div class="text-xs text-ink-muted mt-1">
+                        Hides SHORT setups when your holding period is more than 1 day, since NSE / BSE cash doesn't allow overnight shorts. Uncheck if you trade stock futures or options.
+                    </div>
+                </div>
+            </label>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-border">
+            <div id="plan-error" class="hidden mb-3 p-3 rounded-lg bg-accent-red/15 border border-accent-red/40 text-accent-red text-sm"></div>
+
+            <div class="flex flex-col md:flex-row items-stretch md:items-center gap-4">
+                <button type="submit" class="flex-1 py-3.5 rounded-lg text-white font-bold text-base"
+                        style="background: linear-gradient(135deg, #22d38a 0%, #5b9df9 100%);">
+                    Save plan &amp; continue →
+                </button>
+                <span class="text-xs text-ink-dim md:max-w-xs">
+                    <span class="text-accent-yellow">⚠</span> Advisory only. This tool never places orders. Not investment advice.
+                </span>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% else %}
+{# ============================================================== #}
+{#  DASHBOARD: shown when plan is set                               #}
+{# ============================================================== #}
+
+<div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-6">
+    <div>
+        <h1 class="text-3xl font-bold headline tracking-tight">Dashboard</h1>
+        <p class="text-ink-muted text-sm">Your active plan and today's opportunities.</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <span id="tg-pill" class="hidden px-3 py-2 rounded-full text-xs font-medium border"
+              title="Configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env to enable">
+            Telegram
+        </span>
+        <button type="button" onclick="editPlan()"
+                class="px-4 py-2 rounded-lg text-sm font-medium border border-border text-ink-muted hover:text-ink hover:bg-bg-hover">
+            ✎ Edit plan
+        </button>
+        <a href="/scan" class="px-4 py-2 rounded-lg text-sm font-bold text-white"
+           style="background: linear-gradient(135deg, #22d38a 0%, #5b9df9 100%);">
+            ▶ Run Scan
+        </a>
+    </div>
+    <script>
+        (async () => {
+            try {
+                const r = await fetch("/api/telegram/status");
+                if (!r.ok) return;
+                const j = await r.json();
+                const pill = document.getElementById("tg-pill");
+                if (!pill) return;
+                pill.classList.remove("hidden");
+                if (j.configured) {
+                    pill.textContent = "🔔 Telegram alerts on";
+                    pill.classList.add("border-accent-green/50", "text-accent-green");
+                } else {
+                    pill.textContent = "Telegram off — add to .env";
+                    pill.classList.add("border-border", "text-ink-dim");
+                }
+            } catch (e) { /* silent */ }
+        })();
+    </script>
+</div>
+
+{# Plan strip #}
+<div class="surface p-4 md:p-5 mb-6 grid-bg">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Capital</div>
+            <div class="text-2xl font-bold mono mt-1">₹{{ "{:,.0f}".format(prefs.capital) }}</div>
+        </div>
+        <div>
+            <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Risk / trade</div>
+            <div class="text-2xl font-bold mono text-accent-yellow mt-1">{{ (prefs.risk_pct * 100)|round(1) }}%</div>
+            <div class="text-xs text-ink-dim mono">≈ ₹{{ "{:,.0f}".format(prefs.capital * prefs.risk_pct) }} max loss</div>
+        </div>
+        <div>
+            <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Target / trade</div>
+            <div class="text-2xl font-bold mono text-accent-green mt-1">₹{{ "{:,.0f}".format(prefs.target_profit) }}</div>
+        </div>
+        <div>
+            <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Horizon</div>
+            <div class="text-2xl font-bold mono mt-1">{{ prefs.hold_days }}<span class="text-ink-dim text-base">d</span></div>
+            <div class="text-xs text-ink-dim mono uppercase">{{ prefs.style }}</div>
+        </div>
+    </div>
+</div>
+
+{# KPIs #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="surface p-5">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Today · TAKE</div>
+        <div class="text-3xl font-bold mono text-accent-green">{{ today_scans|selectattr('verdict','equalto','TAKE')|list|length }}</div>
+        <div class="text-xs text-ink-dim mt-1">high-confidence setups</div>
+    </div>
+    <div class="surface p-5">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Today · WATCH</div>
+        <div class="text-3xl font-bold mono text-accent-yellow">{{ today_scans|selectattr('verdict','equalto','WATCH')|list|length }}</div>
+        <div class="text-xs text-ink-dim mt-1">forming setups</div>
+    </div>
+    <div class="surface p-5">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Open trades</div>
+        <div class="text-3xl font-bold mono text-accent-blue">{{ open_trades|length }}</div>
+        <div class="text-xs text-ink-dim mt-1">in journal</div>
+    </div>
+    <div class="surface p-5">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Expectancy</div>
+        <div class="text-3xl font-bold mono
+            {% if stats.expectancy_r and stats.expectancy_r > 0 %}text-accent-green
+            {% elif stats.expectancy_r %}text-accent-red
+            {% else %}text-ink-dim{% endif %}">
+            {% if stats.expectancy_r is not none %}{{ stats.expectancy_r|round(2) }}R{% else %}—{% endif %}
+        </div>
+        <div class="text-xs text-ink-dim mt-1">{{ stats.closed_trades or 0 }} closed trades</div>
+    </div>
+</div>
+
+{# News feed #}
+<div class="surface p-5 mb-8" id="news-feed-box">
+    <div class="flex items-center justify-between mb-3">
+        <div>
+            <h2 class="text-lg font-bold flex items-center gap-2">
+                <span class="w-2 h-2 bg-accent-blue rounded-full pulse-live"></span>
+                News feed
+            </h2>
+            <p class="text-xs text-ink-dim mt-1 mono">
+                <span id="news-count">–</span> stored ·
+                last refresh <span id="news-last">never</span>
+            </p>
+        </div>
+        <button type="button" id="news-refresh-btn"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold border border-border text-ink hover:bg-bg-hover">
+            ⟳ Refresh news
+        </button>
+    </div>
+    <ul id="news-recent" class="text-sm text-ink-muted space-y-1.5 mono"></ul>
+</div>
+
+{# Knowledge index (RAG collections) #}
+<div class="surface p-5 mb-8" id="rag-index-box">
+    <div class="flex items-center justify-between mb-3">
+        <div>
+            <h2 class="text-lg font-bold flex items-center gap-2">
+                <span class="w-2 h-2 bg-accent-purple rounded-full pulse-live"></span>
+                Knowledge index
+            </h2>
+            <p class="text-xs text-ink-dim mt-1 mono">
+                RAG collections the Council agents query at decision time.
+            </p>
+        </div>
+    </div>
+    <div id="rag-collections" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-sm mono">
+        <!-- filled in by loadRagStats() -->
+    </div>
+</div>
+
+{# Today's setups #}
+<div class="mb-10">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h2 class="text-xl font-bold flex items-center gap-2">
+                <span class="w-2 h-2 bg-accent-green rounded-full pulse-live"></span>
+                Today's setups
+            </h2>
+            <p class="text-xs text-ink-dim mt-1 mono">{{ today }} · ranked by confidence · sized to your plan</p>
+        </div>
+    </div>
+
+    {% set take_long_count = today_scans|selectattr('verdict','equalto','TAKE')|selectattr('direction','equalto','long')|list|length %}
+    <a href="/portfolio"
+       class="flex items-center justify-between mb-4 p-3 rounded-lg border border-accent-purple/30 bg-accent-purple/5 hover:bg-accent-purple/10 hover:border-accent-purple/50 transition-colors">
+        <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-md bg-accent-purple/15 text-accent-purple flex items-center justify-center text-sm">📐</span>
+            <div>
+                <div class="text-sm font-bold text-ink">Portfolio-weighted allocation</div>
+                <div class="text-[11px] text-ink-dim mono mt-0.5">
+                    Split your capital across today's TAKE-LONG picks using Hierarchical Risk Parity — avoids sector concentration.
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-[10px] uppercase tracking-widest text-ink-dim mono hidden md:inline">
+                {{ take_long_count }} setup{% if take_long_count != 1 %}s{% endif %} available
+            </span>
+            <span class="text-accent-purple text-lg">→</span>
+        </div>
+    </a>
+
+    {% if hidden_shorts and hidden_shorts > 0 %}
+    <div class="mb-4 p-3 rounded-lg bg-accent-yellow/10 border border-accent-yellow/30 text-sm flex items-start gap-3">
+        <span class="text-accent-yellow text-lg leading-none">ⓘ</span>
+        <div class="flex-1">
+            <span class="font-semibold text-accent-yellow">{{ hidden_shorts }} SHORT setup{% if hidden_shorts > 1 %}s{% endif %} hidden.</span>
+            <span class="text-ink-muted">
+                NSE / BSE cash doesn't allow overnight shorts, and your holding period is
+                {% if prefs and prefs.hold_days %}{{ prefs.hold_days }} day{% if prefs.hold_days > 1 %}s{% endif %}{% endif %}.
+                To see them anyway, uncheck "Cash equity only" in your plan.
+            </span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if today_scans %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for scan in today_scans %}
+        {% set expected_profit = (scan.target and scan.entry and scan.quantity)
+                                  and ((scan.target - scan.entry) * scan.quantity if scan.direction == 'long'
+                                       else (scan.entry - scan.target) * scan.quantity) or 0 %}
+        {% set meets_target = expected_profit >= prefs.target_profit %}
+        <a href="/stock/{{ scan.symbol.split('.')[0] }}" class="block card-hover">
+            <div class="surface p-5 h-full
+                {% if scan.verdict == 'TAKE' %}border-l-4 !border-l-accent-green
+                {% elif scan.verdict == 'WATCH' %}border-l-4 !border-l-accent-yellow
+                {% elif scan.verdict == 'AVOID' %}border-l-4 !border-l-accent-red
+                {% else %}border-l-4 !border-l-border-strong{% endif %}">
+
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <div class="font-bold text-lg tracking-tight">{{ scan.symbol.split('.')[0] }}</div>
+                            <span class="sentiment-pill hidden text-[10px] px-1.5 py-0.5 rounded-full mono border"
+                                  data-symbol="{{ scan.symbol.split('.')[0] }}"
+                                  title="Loading FinBERT sentiment..."></span>
+                        </div>
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">{{ scan.regime }}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs font-bold mono
+                            {% if scan.verdict == 'TAKE' %}text-accent-green
+                            {% elif scan.verdict == 'WATCH' %}text-accent-yellow
+                            {% elif scan.verdict == 'AVOID' %}text-accent-red
+                            {% else %}text-ink-dim{% endif %}">{{ scan.verdict }}</div>
+                        <div class="text-[10px] mono mt-0.5
+                            {% if scan.direction == 'long' %}text-accent-green
+                            {% elif scan.direction == 'short' %}text-accent-red
+                            {% else %}text-ink-dim{% endif %}">
+                            {% if scan.direction == 'long' %}▲ LONG{% elif scan.direction == 'short' %}▼ SHORT{% else %}—{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {# Confidence bar #}
+                <div class="mb-3">
+                    <div class="flex justify-between text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">
+                        <span>Confidence</span>
+                        <span class="font-bold text-ink">{{ scan.confidence|round(0)|int }}/100</span>
+                    </div>
+                    <div class="h-1.5 bg-bg-sub rounded-full overflow-hidden">
+                        <div class="h-full rounded-full
+                            {% if scan.confidence >= 60 %}bg-accent-green
+                            {% elif scan.confidence >= 45 %}bg-accent-yellow
+                            {% else %}bg-border-strong{% endif %}"
+                            style="width: {{ scan.confidence }}%"></div>
+                    </div>
+                </div>
+
+                {# Plan #}
+                {% if scan.entry %}
+                <div class="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Entry</div>
+                        <div class="mono font-semibold">₹{{ "%.1f"|format(scan.entry) }}</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Stop</div>
+                        <div class="mono font-semibold text-accent-red">₹{{ "%.1f"|format(scan.stop_loss) }}</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Target</div>
+                        <div class="mono font-semibold text-accent-green">₹{{ "%.1f"|format(scan.target) }}</div>
+                    </div>
+                </div>
+                <div class="mt-3 pt-3 border-t border-border flex justify-between text-[11px] mono">
+                    <span class="text-ink-dim">R:R <span class="text-ink font-bold">{{ "%.1f"|format(scan.risk_reward) }}</span></span>
+                    <span class="text-ink-dim">Qty <span class="text-ink font-bold">{{ scan.quantity }}</span></span>
+                    <span class="text-ink-dim">Risk <span class="text-accent-red font-bold">₹{{ "%.0f"|format(scan.rupees_at_risk) }}</span></span>
+                </div>
+                {% if expected_profit > 0 %}
+                <div class="mt-2 flex justify-between text-[11px] mono">
+                    <span class="text-ink-dim">Est. profit</span>
+                    <span class="font-bold {% if meets_target %}text-accent-green{% else %}text-accent-yellow{% endif %}">
+                        ₹{{ "%.0f"|format(expected_profit) }}
+                        {% if meets_target %}✓{% else %}(below ₹{{ prefs.target_profit|int }}){% endif %}
+                    </span>
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="text-xs text-ink-dim italic">No tradeable plan</div>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="surface p-8 text-center grid-bg">
+        <div class="text-4xl mb-3">📈</div>
+        <div class="text-ink font-semibold mb-1">No scans yet for today.</div>
+        <div class="text-ink-dim text-sm mb-4">Run the scanner to find setups that fit your plan.</div>
+        <a href="/scan" class="inline-block px-5 py-2.5 rounded-lg text-white font-bold text-sm"
+           style="background: linear-gradient(135deg, #22d38a 0%, #5b9df9 100%);">
+            ▶ Run First Scan
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{# Two-col: Journal + Calculator #}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+    <div>
+        <h2 class="text-xl font-bold mb-4">Journal</h2>
+        <div class="surface overflow-hidden">
+            {% if open_trades or recent_closed %}
+            <table class="w-full text-sm">
+                <thead class="text-[10px] uppercase tracking-widest text-ink-dim mono">
+                    <tr class="border-b border-border">
+                        <th class="text-left px-4 py-3">#</th>
+                        <th class="text-left px-4 py-3">Symbol</th>
+                        <th class="text-left px-4 py-3">Dir</th>
+                        <th class="text-right px-4 py-3">Entry</th>
+                        <th class="text-right px-4 py-3">Stop</th>
+                        <th class="text-right px-4 py-3">Target</th>
+                        <th class="text-center px-4 py-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in open_trades %}
+                    <tr class="border-t border-border hover:bg-bg-hover">
+                        <td class="px-4 py-3 mono text-ink-dim">{{ t.id }}</td>
+                        <td class="px-4 py-3 font-semibold">{{ t.symbol.split('.')[0] }}</td>
+                        <td class="px-4 py-3 mono {% if t.direction == 'long' %}text-accent-green{% else %}text-accent-red{% endif %}">
+                            {% if t.direction == 'long' %}▲{% else %}▼{% endif %} {{ t.direction|upper }}
+                        </td>
+                        <td class="px-4 py-3 text-right mono">₹{{ "%.1f"|format(t.entry) }}</td>
+                        <td class="px-4 py-3 text-right mono text-accent-red">₹{{ "%.1f"|format(t.stop) }}</td>
+                        <td class="px-4 py-3 text-right mono text-accent-green">₹{{ "%.1f"|format(t.target) }}</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="px-2 py-0.5 bg-accent-blue/15 text-accent-blue text-[10px] rounded mono">OPEN</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% for t in recent_closed %}
+                    {% if t.status == 'closed' %}
+                    <tr class="border-t border-border hover:bg-bg-hover">
+                        <td class="px-4 py-3 mono text-ink-dim">{{ t.id }}</td>
+                        <td class="px-4 py-3 font-semibold">{{ t.symbol.split('.')[0] }}</td>
+                        <td class="px-4 py-3 mono {% if t.direction == 'long' %}text-accent-green{% else %}text-accent-red{% endif %}">
+                            {% if t.direction == 'long' %}▲{% else %}▼{% endif %} {{ t.direction|upper }}
+                        </td>
+                        <td class="px-4 py-3 text-right mono">₹{{ "%.1f"|format(t.entry) }}</td>
+                        <td class="px-4 py-3 text-right mono text-ink-dim">→ ₹{{ "%.1f"|format(t.exit_price) }}</td>
+                        <td class="px-4 py-3 text-right mono
+                            {% if t.outcome_r and t.outcome_r > 0 %}text-accent-green{% else %}text-accent-red{% endif %}">
+                            {{ "%.2f"|format(t.outcome_r) }}R
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="px-2 py-0.5
+                                {% if t.pnl and t.pnl > 0 %}bg-accent-green/15 text-accent-green
+                                {% else %}bg-accent-red/15 text-accent-red{% endif %} text-[10px] rounded mono">
+                                ₹{{ "%.0f"|format(t.pnl) }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="p-8 text-center text-ink-dim">
+                No trades logged yet.
+                <div class="text-xs mt-1">Run a scan, click a stock, then "Log this trade".</div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="mt-3 text-right">
+            <a href="/history" class="text-sm text-accent-blue hover:underline">Full history →</a>
+        </div>
+    </div>
+
+    <div>
+        <h2 class="text-xl font-bold mb-4">P&amp;L calculator</h2>
+        <div class="surface p-6">
+            <p class="text-sm text-ink-muted mb-4">Enter a stock and quantity. Live price is pulled from the market data source.</p>
+            <form id="pnl-form" class="space-y-3">
+                <div>
+                    <label class="text-[10px] uppercase tracking-widest text-ink-dim mono">Symbol</label>
+                    <input type="text" name="symbol" placeholder="RELIANCE" required
+                           class="w-full mt-1 px-3 py-2.5 bg-bg-sub border border-border rounded-lg text-white mono uppercase">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] uppercase tracking-widest text-ink-dim mono">Quantity</label>
+                        <input type="number" name="quantity" placeholder="50" min="1" required
+                               class="w-full mt-1 px-3 py-2.5 bg-bg-sub border border-border rounded-lg text-white mono">
+                    </div>
+                    <div>
+                        <label class="text-[10px] uppercase tracking-widest text-ink-dim mono">Buy price ₹</label>
+                        <input type="number" name="buy_price" placeholder="1300" min="0.01" step="0.01" required
+                               class="w-full mt-1 px-3 py-2.5 bg-bg-sub border border-border rounded-lg text-white mono">
+                    </div>
+                </div>
+                <button type="submit" class="w-full py-2.5 rounded-lg text-white font-bold text-sm"
+                        style="background: linear-gradient(135deg, #22d38a 0%, #5b9df9 100%);">
+                    Calculate
+                </button>
+            </form>
+
+            <div id="pnl-result" class="hidden mt-6 pt-6 border-t border-border">
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Current</div>
+                        <div class="text-2xl font-bold mono" id="pnl-current">—</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Buy</div>
+                        <div class="text-2xl font-bold mono text-ink-muted" id="pnl-buy">—</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-bg-sub rounded-lg p-3 border border-border">
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Invested</div>
+                        <div class="text-lg font-bold mono" id="pnl-invested">—</div>
+                    </div>
+                    <div class="bg-bg-sub rounded-lg p-3 border border-border">
+                        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Value</div>
+                        <div class="text-lg font-bold mono" id="pnl-value">—</div>
+                    </div>
+                </div>
+                <div class="bg-bg-sub rounded-lg p-4 border border-border">
+                    <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Profit / Loss</div>
+                    <div class="text-3xl font-bold mono" id="pnl-amount">—</div>
+                    <div class="text-sm mono mt-1" id="pnl-pct">—</div>
+                </div>
+                <div id="pnl-recommendation" class="hidden mt-4 p-3 rounded-lg bg-accent-blue/10 border border-accent-blue/30">
+                    <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Advisor's verdict</div>
+                    <div id="pnl-rec-text" class="text-sm"></div>
+                </div>
+            </div>
+
+            <div id="pnl-error" class="hidden mt-4 p-3 rounded-lg bg-accent-red/15 border border-accent-red/40 text-accent-red text-sm"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const planForm = document.getElementById('plan-form');
+if (planForm) {
+    planForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const err = document.getElementById('plan-error');
+        err.classList.add('hidden');
+        const payload = {
+            capital: parseFloat(form.capital.value),
+            risk_pct: parseFloat(form.risk_pct.value),
+            target_profit: parseFloat(form.target_profit.value),
+            hold_days: parseInt(form.hold_days.value),
+            cash_only: form.cash_only ? form.cash_only.checked : true,
+        };
+        try {
+            const res = await fetch('/api/prefs', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                window.location.href = '/';
+            } else {
+                err.textContent = data.error || 'Could not save plan.';
+                err.classList.remove('hidden');
+            }
+        } catch (ex) {
+            err.textContent = 'Network error: ' + ex.message;
+            err.classList.remove('hidden');
+        }
+    });
+}
+
+function editPlan() {
+    fetch('/api/prefs/reset', {method: 'POST'})
+        .finally(() => { window.location.href = '/'; });
+}
+
+// -------- News feed section --------
+async function loadNewsStats() {
+    const box = document.getElementById('news-feed-box');
+    if (!box) return;
+    try {
+        const res = await fetch('/api/news/stats');
+        const data = await res.json();
+        document.getElementById('news-count').textContent = data.count ?? 0;
+        document.getElementById('news-last').textContent =
+            data.last_run_at ? data.last_run_at.replace('T', ' ') :
+            (data.count > 0 ? 'earlier' : 'never');
+        const ul = document.getElementById('news-recent');
+        ul.innerHTML = '';
+        if (!data.recent || data.recent.length === 0) {
+            ul.innerHTML = '<li class="text-ink-dim">No news yet — click Refresh to fetch headlines.</li>';
+            return;
+        }
+        for (const item of data.recent) {
+            const li = document.createElement('li');
+            if (item.symbol) {
+                const symEl = document.createElement('span');
+                symEl.className = 'text-accent-blue font-bold';
+                symEl.textContent = `[${item.symbol}]`;
+                li.appendChild(symEl);
+                li.appendChild(document.createTextNode(' '));
+            }
+            if (item.link && /^https?:\/\//i.test(item.link)) {
+                const a = document.createElement('a');
+                a.href = item.link;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.className = 'hover:text-ink';
+                a.textContent = item.title;
+                li.appendChild(a);
+            } else {
+                li.appendChild(document.createTextNode(item.title ?? ''));
+            }
+            li.appendChild(document.createTextNode(' '));
+            const srcEl = document.createElement('span');
+            srcEl.className = 'text-ink-dim';
+            srcEl.textContent = `(${item.source})`;
+            li.appendChild(srcEl);
+            ul.appendChild(li);
+        }
+    } catch (e) {
+        // silent — panel just stays as-is
+    }
+}
+
+const newsBtn = document.getElementById('news-refresh-btn');
+if (newsBtn) {
+    newsBtn.addEventListener('click', async () => {
+        newsBtn.disabled = true;
+        newsBtn.textContent = '⟳ Refreshing…';
+        try {
+            await fetch('/api/news/refresh', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({limit: 100}),
+            });
+            // Poll a few times while the background job runs.
+            let tries = 0;
+            const poll = setInterval(async () => {
+                await loadNewsStats();
+                tries += 1;
+                if (tries >= 8) {
+                    clearInterval(poll);
+                    newsBtn.disabled = false;
+                    newsBtn.textContent = '⟳ Refresh news';
+                }
+            }, 2000);
+        } catch (e) {
+            newsBtn.disabled = false;
+            newsBtn.textContent = '⟳ Refresh news';
+        }
+    });
+    loadNewsStats();
+}
+
+// -------- RAG knowledge-index panel --------
+const RAG_KINDS = [
+    {name: 'news_archive',    kind: 'news',     refresh: true,  label: 'News archive'},
+    {name: 'investor_wisdom', kind: null,       refresh: false, label: 'Investor wisdom'},
+    {name: 'pattern_library', kind: 'patterns', refresh: true,  label: 'Patterns'},
+    {name: 'filings',         kind: 'filings',  refresh: true,  label: 'Filings'},
+    {name: 'earnings_calls',  kind: 'earnings', refresh: true,  label: 'Earnings'},
+];
+
+async function loadRagStats() {
+    const box = document.getElementById('rag-collections');
+    if (!box) return;
+    try {
+        const res = await fetch('/api/rag/stats');
+        const data = await res.json();
+        const counts = data.collections || {};
+        const running = data.running || {};
+        const lastRun = data.last_run_at || {};
+        box.innerHTML = '';
+        for (const c of RAG_KINDS) {
+            const n = counts[c.name] ?? 0;
+            const isRunning = c.kind && running[c.kind];
+            const last = c.kind && lastRun[c.kind];
+            const btn = c.refresh
+                ? `<button type="button" data-kind="${c.kind}"
+                          class="rag-refresh-btn mt-2 px-2 py-1 rounded text-[10px] font-bold
+                                 border border-border text-ink-muted hover:text-ink hover:bg-bg-hover">
+                        ${isRunning ? '⟳ Running...' : '⟳ Refresh'}
+                   </button>`
+                : '';
+            const lastLbl = last ? `<div class="text-[10px] text-ink-dim mono mt-1">last: ${String(last).replace('T',' ')}</div>` : '';
+            const card = document.createElement('div');
+            card.className = 'rounded-lg border border-border p-3 bg-bg-sub';
+            card.innerHTML = `
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim">${c.label}</div>
+                <div class="text-2xl font-bold mt-1 ${n > 0 ? 'text-ink' : 'text-ink-dim'}">${n}</div>
+                <div class="text-[10px] text-ink-dim">documents</div>
+                ${lastLbl}
+                ${btn}
+            `;
+            box.appendChild(card);
+        }
+        box.querySelectorAll('.rag-refresh-btn').forEach(b => {
+            b.addEventListener('click', async () => {
+                const kind = b.getAttribute('data-kind');
+                if (!kind) return;
+                b.disabled = true;
+                b.textContent = '⟳ Starting...';
+                try {
+                    if (kind === 'news') {
+                        await fetch('/api/news/refresh', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({limit: 100}),
+                        });
+                    } else {
+                        await fetch('/api/rag/refresh?kind=' + encodeURIComponent(kind), {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({limit: 100}),
+                        });
+                    }
+                    let tries = 0;
+                    const poll = setInterval(async () => {
+                        await loadRagStats();
+                        tries += 1;
+                        if (tries >= 15) clearInterval(poll);
+                    }, 2500);
+                } catch (e) {
+                    b.disabled = false;
+                    b.textContent = '⟳ Refresh';
+                }
+            });
+        });
+    } catch (e) {
+        box.innerHTML = '<div class="text-ink-dim text-xs">Could not load knowledge index.</div>';
+    }
+}
+if (document.getElementById('rag-index-box')) {
+    loadRagStats();
+}
+
+// -------- FinBERT sentiment pills on stock cards --------
+async function loadSentimentPills() {
+    const pills = document.querySelectorAll('.sentiment-pill[data-symbol]');
+    if (!pills.length) return;
+    // Dedupe symbols to a single batch request
+    const symbols = [...new Set([...pills].map(p => p.getAttribute('data-symbol')))];
+    if (!symbols.length) return;
+    try {
+        // 14d default; widened here so old ingest data still renders during dev
+        const url = '/api/sentiment/batch?age_days=3650&symbols=' +
+                    encodeURIComponent(symbols.join(','));
+        const res = await fetch(url);
+        const data = await res.json();
+        const bySym = (data && data.sentiment) || {};
+        pills.forEach(p => {
+            const sym = p.getAttribute('data-symbol');
+            const s = bySym[sym];
+            if (!s || !s.headline_count) return;   // no news -> stay hidden
+            const mean = Number(s.mean_score) || 0;
+            let dot, cls, label;
+            if (mean > 0.05)      { dot = '🟢'; cls = 'text-accent-green border-accent-green/40 bg-accent-green/10'; label = 'positive'; }
+            else if (mean < -0.05){ dot = '🔴'; cls = 'text-accent-red border-accent-red/40 bg-accent-red/10';       label = 'negative'; }
+            else                  { dot = '⚪'; cls = 'text-ink-dim border-border';                                   label = 'neutral';  }
+            p.className = 'sentiment-pill text-[10px] px-1.5 py-0.5 rounded-full mono border ' + cls;
+            p.innerHTML = `${dot} ${mean >= 0 ? '+' : ''}${mean.toFixed(2)}`;
+            const src = s.most_positive ? s.most_positive.title : '';
+            p.title = `News sentiment: ${label} (mean ${mean.toFixed(2)}, ${s.headline_count} headline${s.headline_count === 1 ? '' : 's'})` +
+                      (src ? `\nTop: ${src}` : '');
+            p.classList.remove('hidden');
+        });
+    } catch (e) {
+        // silent; pills just stay hidden
+    }
+}
+loadSentimentPills();
+
+const pnlForm = document.getElementById('pnl-form');
+if (pnlForm) {
+    pnlForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const payload = {
+            symbol: form.symbol.value,
+            quantity: parseInt(form.quantity.value),
+            buy_price: parseFloat(form.buy_price.value),
+        };
+        const result = document.getElementById('pnl-result');
+        const error = document.getElementById('pnl-error');
+        result.classList.add('hidden');
+        error.classList.add('hidden');
+        try {
+            const res = await fetch('/api/pnl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                document.getElementById('pnl-current').textContent = '₹' + data.current_price.toFixed(2);
+                document.getElementById('pnl-buy').textContent = '₹' + data.buy_price.toFixed(2);
+                document.getElementById('pnl-invested').textContent = '₹' + data.invested.toLocaleString('en-IN');
+                document.getElementById('pnl-value').textContent = '₹' + data.current_value.toLocaleString('en-IN');
+                const pnlEl = document.getElementById('pnl-amount');
+                const pctEl = document.getElementById('pnl-pct');
+                pnlEl.textContent = (data.pnl >= 0 ? '+' : '') + '₹' + data.pnl.toLocaleString('en-IN');
+                pnlEl.className = 'text-3xl font-bold mono ' + (data.pnl >= 0 ? 'text-accent-green' : 'text-accent-red');
+                pctEl.textContent = (data.pnl_pct >= 0 ? '+' : '') + data.pnl_pct.toFixed(2) + '%';
+                pctEl.className = 'text-sm mono mt-1 ' + (data.pnl_pct >= 0 ? 'text-accent-green' : 'text-accent-red');
+                if (data.recommendation) {
+                    const rec = data.recommendation;
+                    const recBox = document.getElementById('pnl-recommendation');
+                    const recText = document.getElementById('pnl-rec-text');
+                    recText.innerHTML = `<span class="font-bold">${rec.verdict}</span> — ${rec.direction} @ confidence ${rec.confidence}/100. ` +
+                        (rec.entry ? `Entry ₹${rec.entry.toFixed(1)}, stop ₹${rec.stop_loss.toFixed(1)}, target ₹${rec.target.toFixed(1)}.` : 'No tradeable setup.');
+                    recBox.classList.remove('hidden');
+                }
+                result.classList.remove('hidden');
+            } else {
+                error.textContent = data.error || 'Failed to calculate P&L.';
+                error.classList.remove('hidden');
+            }
+        } catch (err) {
+            error.textContent = 'Network error: ' + err.message;
+            error.classList.remove('hidden');
+        }
+    });
+}
+</script>
+{% endblock %}

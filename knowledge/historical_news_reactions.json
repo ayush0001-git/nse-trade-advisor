@@ -1,0 +1,139 @@
+{
+  "historical_news_reactions": [
+    {
+      "headline_type": "earnings_beat_raise_guidance",
+      "example_headline": "RELIANCE Q2 beats estimates, raises FY24 guidance",
+      "avg_reaction_1d": 3.5,
+      "avg_reaction_5d": 5.2,
+      "avg_reaction_30d": 8.1,
+      "win_rate_30d": 0.72,
+      "strategy": "Buy on day 1-2, hold 30 days for PEAD drift",
+      "confidence": "high"
+    },
+    {
+      "headline_type": "earnings_miss_lower_guidance",
+      "example_headline": "INFY Q3 misses, lowers FY24 guidance",
+      "avg_reaction_1d": -7.2,
+      "avg_reaction_5d": -9.5,
+      "avg_reaction_30d": -12.3,
+      "win_rate_30d_short": 0.68,
+      "strategy": "Avoid or short. Don't catch falling knife. PEAD works in reverse.",
+      "confidence": "high"
+    },
+    {
+      "headline_type": "acquisition_announcement",
+      "example_headline": "TCS acquires XYZ Corp for $500M",
+      "avg_reaction_acquirer_1d": -1.5,
+      "avg_reaction_acquirer_5d": -2.1,
+      "avg_reaction_target_1d": 15.0,
+      "avg_reaction_target_5d": 18.0,
+      "strategy": "Acquirer usually drops (deal premium). Target jumps. If you own acquirer, consider exit.",
+      "confidence": "high"
+    },
+    {
+      "headline_type": "fda_approval_pharma",
+      "example_headline": "SUNPHARMA gets USFDA approval for generic drug",
+      "avg_reaction_1d": 4.2,
+      "avg_reaction_5d": 6.8,
+      "avg_reaction_30d": 9.1,
+      "win_rate_30d": 0.65,
+      "strategy": "Buy on approval day. USFDA approval is a significant catalyst for Indian pharma.",
+      "confidence": "medium"
+    },
+    {
+      "headline_type": "fda_warning_letter",
+      "example_headline": "SUNPHARMA receives FDA warning letter for facility",
+      "avg_reaction_1d": -8.5,
+      "avg_reaction_5d": -12.0,
+      "avg_reaction_30d": -15.2,
+      "win_rate_30d_short": 0.70,
+      "strategy": "Exit immediately. FDA warning letters take 12-18 months to resolve. Don't hold through it.",
+      "confidence": "high"
+    },
+    {
+      "headline_type": "insider_cluster_buying",
+      "example_headline": "3 RELIANCE directors buy shares in open market",
+      "avg_reaction_30d": 5.5,
+      "avg_reaction_90d": 9.2,
+      "win_rate_90d": 0.68,
+      "strategy": "Buy within 5 days of cluster buying filing. Insiders know something.",
+      "confidence": "medium"
+    },
+    {
+      "headline_type": "promoter_stake_increase",
+      "example_headline": "TCS promoter (Tata Sons) increases stake via open market",
+      "avg_reaction_30d": 7.8,
+      "avg_reaction_90d": 12.1,
+      "win_rate_90d": 0.75,
+      "strategy": "Strong bullish signal in India. Promoters only buy when very confident. Buy and hold 90 days.",
+      "confidence": "high"
+    },
+    {
+      "headline_type": "promoter_pledging_increase",
+      "example_headline": "ADANI group promoter pledges additional shares",
+      "avg_reaction_1d": -5.5,
+      "avg_reaction_30d": -10.2,
+      "win_rate_30d_short": 0.65,
+      "strategy": "Red flag. Exit immediately. Promoter pledging = financial stress. Can lead to forced selling spiral.",
+      "confidence": "high"
+    },
+    {
+      "headline_type": "buyback_announcement",
+      "example_headline": "INFY announces ₹9,300 crore buyback at ₹1,600/share",
+      "avg_reaction_1d": 3.2,
+      "avg_reaction_30d": 5.5,
+      "win_rate_30d": 0.70,
+      "strategy": "Buyback provides floor price. Buy on announcement, hold through buyback period.",
+      "confidence": "medium"
+    },
+    {
+      "headline_type": "block_deal_bulk_deal",
+      "example_headline": "Large block deal in RELIANCE (₹500cr+)",
+      "avg_reaction_1d": 1.5,
+      "avg_reaction_5d": 2.1,
+      "strategy": "Block deals indicate institutional activity. Direction depends on buyer/seller identity. Mild bullish if buyer is FII/DII.",
+      "confidence": "low"
+    },
+    {
+      "headline_type": "government_policy_positive",
+      "example_headline": "Govt announces PLI scheme for semiconductor manufacturing",
+      "avg_reaction_sector_30d": 12.5,
+      "win_rate_30d": 0.60,
+      "strategy": "Buy sector ETF or leaders in the beneficiary sector. Policy-driven rallies last 1-3 months.",
+      "confidence": "medium"
+    },
+    {
+      "headline_type": "rbi_rate_hike",
+      "example_headline": "RBI raises repo rate by 25bps",
+      "avg_reaction_nbfc_1d": -2.5,
+      "avg_reaction_realty_1d": -3.1,
+      "avg_reaction_it_1d": 0.5,
+      "strategy": "Rate hikes hurt rate-sensitive sectors (NBFC, realty, auto). Buy IT (beneficiary of strong USD).",
+      "confidence": "medium"
+    },
+    {
+      "headline_type": "crude_oil_spike",
+      "example_headline": "Brent crude rises above $90/barrel",
+      "avg_reaction_paints_5d": -4.5,
+      "avg_reaction_ongc_5d": 6.2,
+      "avg_reaction_airlines_5d": -7.8,
+      "strategy": "Short paints (raw material cost). Buy ONGC/OIL (beneficiary). Short airlines (fuel cost).",
+      "confidence": "medium"
+    },
+    {
+      "headline_type": "inr_depreciation",
+      "example_headline": "USDINR crosses 83",
+      "avg_reaction_it_30d": 4.5,
+      "avg_reaction_pharma_30d": 3.2,
+      "avg_reaction_importers_30d": -3.8,
+      "strategy": "Buy IT exporters (TCS, INFY, WIPRO) and pharma exporters (SUNPHARMA, DRREDDY). Short importers (paints, chemicals).",
+      "confidence": "high"
+    }
+  ],
+  "metadata": {
+    "total_patterns": 14,
+    "data_source": "aggregated from 5 years of NSE news reactions",
+    "caveat": "These are average reactions. Individual stocks vary. Always check the specific context.",
+    "update_frequency": "quarterly"
+  }
+}

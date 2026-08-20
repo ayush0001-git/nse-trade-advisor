@@ -1,0 +1,230 @@
+{
+  "trained_at": "2026-06-24T06:13:35.092922",
+  "sources_total": 43,
+  "sources_with_content": 34,
+  "sources_failed": 9,
+  "this_run_scraped_ok": 0,
+  "this_run_scraped_fail": 9,
+  "rag_documents_total": 796,
+  "market_data_sources_docs": 796,
+  "live_strategy_briefs_docs": 0,
+  "groq_available": false,
+  "groq_note": "Groq API key returned 403 Forbidden; markdown chunking used instead (full content preserved for semantic search).",
+  "sources": [
+    {
+      "name": "Yahoo Finance",
+      "url": "https://finance.yahoo.com",
+      "category": "Price & Market Data (Free)"
+    },
+    {
+      "name": "Alpha Vantage",
+      "url": "https://www.alphavantage.co",
+      "category": "Price & Market Data (Free)"
+    },
+    {
+      "name": "Polygon.io",
+      "url": "https://polygon.io",
+      "category": "Price & Market Data (Free)"
+    },
+    {
+      "name": "NASDAQ API",
+      "url": "https://api.nasdaq.com",
+      "category": "Price & Market Data (Free)"
+    },
+    {
+      "name": "Stooq",
+      "url": "https://stooq.com",
+      "category": "Price & Market Data (Free)"
+    },
+    {
+      "name": "IEX Cloud",
+      "url": "https://iexcloud.io",
+      "category": "Price & Market Data (Free)"
+    },
+    {
+      "name": "Finnhub",
+      "url": "https://finnhub.io",
+      "category": "Price & Market Data (Free)"
+    },
+    {
+      "name": "NewsAPI",
+      "url": "https://newsapi.org",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Yahoo RSS",
+      "url": "https://feeds.finance.yahoo.com/rss/2.0/headline",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Reuters",
+      "url": "https://www.reuters.com/finance",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Bloomberg",
+      "url": "https://www.bloomberg.com/markets",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Seeking Alpha",
+      "url": "https://seekingalpha.com",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Benzinga",
+      "url": "https://benzinga.com",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Stock Analysis",
+      "url": "https://stockanalysis.com",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Reddit WSB",
+      "url": "https://www.reddit.com/r/wallstreetbets/.json",
+      "category": "News & Sentiment (Free)"
+    },
+    {
+      "name": "Simply Wall St",
+      "url": "https://simplywall.st",
+      "category": "Fundamental Data (Free)"
+    },
+    {
+      "name": "GuruFocus",
+      "url": "https://www.gurufocus.com",
+      "category": "Fundamental Data (Free)"
+    },
+    {
+      "name": "SEC EDGAR",
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar",
+      "category": "Fundamental Data (Free)"
+    },
+    {
+      "name": "FRED",
+      "url": "https://fred.stlouisfed.org",
+      "category": "Macro & Economic Data (Free)"
+    },
+    {
+      "name": "BLS",
+      "url": "https://www.bls.gov",
+      "category": "Macro & Economic Data (Free)"
+    },
+    {
+      "name": "Census",
+      "url": "https://www.census.gov/economic-indicators/",
+      "category": "Macro & Economic Data (Free)"
+    },
+    {
+      "name": "EIA",
+      "url": "https://www.eia.gov/opendata/",
+      "category": "Macro & Economic Data (Free)"
+    },
+    {
+      "name": "CNN Fear & Greed",
+      "url": "https://money.cnn.com/data/fear-and-greed/",
+      "category": "Fear, Greed & Sentiment"
+    },
+    {
+      "name": "VIX",
+      "url": "https://markets.businessinsider.com/indices/vix",
+      "category": "Fear, Greed & Sentiment"
+    },
+    {
+      "name": "AAII Sentiment",
+      "url": "https://www.aaii.com/sentimentsurvey",
+      "category": "Fear, Greed & Sentiment"
+    },
+    {
+      "name": "Put/Call Ratio",
+      "url": "https://www.putcallratio.com",
+      "category": "Fear, Greed & Sentiment"
+    },
+    {
+      "name": "Unusual Whales",
+      "url": "https://unusualwhales.com",
+      "category": "Options Flow & Dark Pool"
+    },
+    {
+      "name": "CBOE",
+      "url": "https://www.cboe.com/delayed_quotes/",
+      "category": "Options Flow & Dark Pool"
+    },
+    {
+      "name": "Finviz",
+      "url": "https://finviz.com/screener.ashx",
+      "category": "Options Flow & Dark Pool"
+    },
+    {
+      "name": "Dark Pool Levels",
+      "url": "https://darkpoollevels.com",
+      "category": "Options Flow & Dark Pool"
+    },
+    {
+      "name": "SqueezeMetrics",
+      "url": "https://www.squeezemetrics.com",
+      "category": "Options Flow & Dark Pool"
+    },
+    {
+      "name": "OpenInsider",
+      "url": "https://openinsider.com",
+      "category": "Insider & Congressional Trading"
+    },
+    {
+      "name": "SEC Form 4",
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?type=4",
+      "category": "Insider & Congressional Trading"
+    },
+    {
+      "name": "QuiverQuant",
+      "url": "https://www.quiverquant.com/congresstrading/",
+      "category": "Insider & Congressional Trading"
+    },
+    {
+      "name": "House Filings",
+      "url": "https://efts.house.gov/LATEST/search-index",
+      "category": "Insider & Congressional Trading"
+    },
+    {
+      "name": "Earnings Whispers",
+      "url": "https://earningswhispers.com",
+      "category": "Earnings & Events Calendar"
+    },
+    {
+      "name": "Yahoo Calendar",
+      "url": "https://finance.yahoo.com/calendar/earnings",
+      "category": "Earnings & Events Calendar"
+    },
+    {
+      "name": "Forex Factory",
+      "url": "https://www.forexfactory.com/calendar",
+      "category": "Earnings & Events Calendar"
+    },
+    {
+      "name": "Google Trends",
+      "url": "https://trends.google.com",
+      "category": "Alternative Data"
+    },
+    {
+      "name": "Glassdoor",
+      "url": "https://www.glassdoor.com/research/",
+      "category": "Alternative Data"
+    },
+    {
+      "name": "Google Patents",
+      "url": "https://patents.google.com",
+      "category": "Alternative Data"
+    },
+    {
+      "name": "CoinGecko",
+      "url": "https://api.coingecko.com/api/v3",
+      "category": "Alternative Data"
+    },
+    {
+      "name": "SafeGraph",
+      "url": "https://www.safegraph.com",
+      "category": "Alternative Data"
+    }
+  ]
+}

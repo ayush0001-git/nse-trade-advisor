@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block title %}Walk-forward · {{ symbol }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+        <a href="/backtest/optimize/{{ symbol }}" class="text-sm text-ink-muted hover:text-ink">← Back to optimize · {{ symbol }}</a>
+        <a href="/stock/{{ symbol }}" class="text-sm text-ink-muted hover:text-ink">Stock page →</a>
+    </div>
+    <h1 class="text-3xl font-bold headline tracking-tight mt-2">Walk-forward · {{ symbol }}</h1>
+    <p class="text-ink-muted text-sm">
+        Rolling 1-year train / 3-month test windows across 5 years of daily bars.
+        Each fold picks the Sharpe-best (RSI-low, RSI-high, ADX-min) combo in-sample,
+        then evaluates <em>that</em> combo on the next unseen 3 months. The mean
+        out-of-sample Sharpe is the honest score — it tells you whether the optimizer
+        is finding signal or fitting noise (López de Prado's classic overfit trap).
+    </p>
+</div>
+
+<div id="wf-loading" class="surface p-8 text-center">
+    <div class="text-lg text-ink-muted">
+        <span class="inline-block animate-pulse">↻</span> Running walk-forward on {{ symbol }}...
+    </div>
+    <div class="text-xs text-ink-dim mt-2 mono">This takes ~60–90 s (many folds × 64 combos each).</div>
+</div>
+
+<div id="wf-error" class="hidden surface p-6 border border-accent-red/40">
+    <h2 class="text-lg font-bold text-accent-red mb-2">Walk-forward failed</h2>
+    <pre id="wf-error-body" class="text-xs mono text-accent-red whitespace-pre-wrap"></pre>
+</div>
+
+<div id="wf-result" class="hidden space-y-6">
+
+    <!-- Too-few-folds warning -->
+    <div id="wf-fewfolds" class="hidden surface p-4 border border-accent-yellow/40">
+        <div class="text-sm text-accent-yellow"><span class="font-bold">Too few folds — history too short to walk-forward meaningfully.</span> Treat the numbers below as directional at best.</div>
+    </div>
+
+    <!-- Honesty headline -->
+    <div id="wf-headline" class="surface p-6"></div>
+
+    <!-- Verdict + robust params -->
+    <div class="grid md:grid-cols-2 gap-6">
+        <div id="wf-verdict" class="surface p-6"></div>
+        <div id="wf-robust" class="surface p-6"></div>
+    </div>
+
+    <!-- Full-period comparison table -->
+    <div class="surface p-6">
+        <h2 class="text-lg font-bold mb-1">Full-period sanity: robust vs in-sample-only vs baseline</h2>
+        <p class="text-xs text-ink-dim mb-4 mono" id="wf-range">—</p>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-[10px] uppercase tracking-widest text-ink-dim mono">
+                    <tr class="border-b border-border">
+                        <th class="text-left py-2 px-2">Strategy</th>
+                        <th class="text-left py-2 px-2">Params</th>
+                        <th class="text-right py-2 px-2">Full-period Sharpe</th>
+                        <th class="text-right py-2 px-2">Full-period Return</th>
+                    </tr>
+                </thead>
+                <tbody id="wf-cmp-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- IS vs OOS Sharpe chart -->
+    <div class="surface p-6">
+        <h2 class="text-lg font-bold mb-1">IS vs OOS Sharpe per fold</h2>
+        <p class="text-xs text-ink-dim mb-4 mono">
+            Blue = in-sample Sharpe of the picked combo. Purple = out-of-sample Sharpe of
+            the same combo on the next unseen window. Big blue-purple gap = overfit fold.
+        </p>
+        <div class="overflow-x-auto">
+            <canvas id="wf-chart" height="280"></canvas>
+        </div>
+    </div>
+
+    <!-- Fold-by-fold table -->
+    <div class="surface p-6">
+        <h2 class="text-lg font-bold mb-1">Fold-by-fold</h2>
+        <p class="text-xs text-ink-dim mb-4 mono">Each row = one train/test slice. IS params were chosen on train, then evaluated once on test.</p>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-[10px] uppercase tracking-widest text-ink-dim mono">
+                    <tr class="border-b border-border">
+                        <th class="text-left py-2 px-2">#</th>
+                        <th class="text-left py-2 px-2">Train</th>
+                        <th class="text-left py-2 px-2">Test</th>
+                        <th class="text-right py-2 px-2">IS params</th>
+                        <th class="text-right py-2 px-2">IS Sharpe</th>
+                        <th class="text-right py-2 px-2">OOS Sharpe</th>
+                        <th class="text-right py-2 px-2">OOS Return</th>
+                        <th class="text-right py-2 px-2">OOS Trades</th>
+                    </tr>
+                </thead>
+                <tbody id="wf-folds-body"></tbody>
+            </table>
+        </div>
+        <div class="text-xs text-ink-dim mono mt-3" id="wf-meta">—</div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(async () => {
+    const err = document.getElementById('wf-error');
+    const loading = document.getElementById('wf-loading');
+    const result = document.getElementById('wf-result');
+    try {
+        const res = await fetch('/api/backtest/walkforward/{{ symbol }}');
+        const data = await res.json();
+        loading.classList.add('hidden');
+        if (!res.ok) {
+            document.getElementById('wf-error-body').textContent = data.error + '\n\n' + (data.traceback || '');
+            err.classList.remove('hidden');
+            return;
+        }
+        renderResult(data);
+        result.classList.remove('hidden');
+    } catch (e) {
+        loading.classList.add('hidden');
+        document.getElementById('wf-error-body').textContent = 'Network error: ' + e.message;
+        err.classList.remove('hidden');
+    }
+})();
+
+function fmt(v, d = 2) {
+    if (v === null || v === undefined || Number.isNaN(v)) return '—';
+    return Number(v).toFixed(d);
+}
+function fmtPct(v) {
+    if (v === null || v === undefined) return '—';
+    const s = v >= 0 ? '+' : '';
+    return s + Number(v).toFixed(2) + '%';
+}
+function fmtInt(v) { return v === null || v === undefined ? '—' : Math.round(v).toLocaleString('en-IN'); }
+function colorFor(v) {
+    if (v === null || v === undefined) return 'text-ink-dim';
+    return v > 0 ? 'text-accent-green' : 'text-accent-red';
+}
+
+function renderResult(d) {
+    if ((d.n_folds || 0) < 4) {
+        document.getElementById('wf-fewfolds').classList.remove('hidden');
+    }
+
+    // --- Honesty headline ---
+    const meanOos = d.mean_oos_sharpe;
+    const meanIs = d.mean_is_sharpe;
+    const delta = (meanIs !== null && meanOos !== null) ? (meanIs - meanOos) : null;
+    const deltaColor = delta === null ? 'text-ink-dim'
+        : (delta > 0.7 ? 'text-accent-red' : (delta > 0.3 ? 'text-accent-yellow' : 'text-accent-green'));
+    document.getElementById('wf-headline').innerHTML = `
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Honest out-of-sample score</div>
+                <h2 class="text-2xl font-bold ${colorFor(meanOos)} mt-1">
+                    Mean OOS Sharpe: ${fmt(meanOos)}
+                </h2>
+                <p class="text-sm text-ink-muted mt-1">
+                    In-sample mean Sharpe: <span class="mono ${colorFor(meanIs)}">${fmt(meanIs)}</span>
+                    · IS→OOS drop: <span class="mono ${deltaColor}">${delta === null ? '—' : (delta >= 0 ? '+' : '') + delta.toFixed(2)}</span>
+                </p>
+            </div>
+            <div class="text-right text-sm text-ink-muted">
+                <div>Folds: <span class="mono font-bold text-ink">${d.n_folds}</span></div>
+                <div>Median OOS Sharpe: <span class="mono ${colorFor(d.median_oos_sharpe)}">${fmt(d.median_oos_sharpe)}</span></div>
+                <div>Wall-clock: <span class="mono text-ink-muted">${fmt(d.elapsed_sec, 1)}s</span></div>
+            </div>
+        </div>
+        ${d.warning ? `<div class="mt-3 text-xs text-accent-yellow mono">⚠ ${d.warning}</div>` : ''}
+    `;
+
+    // --- Verdict tile ---
+    let verdict, verdictColor, verdictNote;
+    if (delta === null) {
+        verdict = 'UNKNOWN'; verdictColor = 'text-ink-muted';
+        verdictNote = 'Could not compute IS/OOS gap.';
+    } else if (delta < 0.3) {
+        verdict = 'LOW'; verdictColor = 'text-accent-green';
+        verdictNote = 'OOS performance tracks IS closely. Optimizer is finding real signal, not noise.';
+    } else if (delta < 0.7) {
+        verdict = 'MODERATE'; verdictColor = 'text-accent-yellow';
+        verdictNote = 'Some IS→OOS decay. Use the robust params, not the in-sample-only best.';
+    } else {
+        verdict = 'HIGH'; verdictColor = 'text-accent-red';
+        verdictNote = 'Large drop from IS to OOS. The in-sample-only best is fitting noise — do not trust it.';
+    }
+    document.getElementById('wf-verdict').innerHTML = `
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Overfitting risk</div>
+        <h3 class="text-3xl font-bold ${verdictColor} mt-1">${verdict}</h3>
+        <p class="text-sm text-ink-muted mt-3">${verdictNote}</p>
+    `;
+
+    // --- Robust params card ---
+    const rp = d.robust_params || {};
+    const frac = rp.picked_by_frac === undefined ? 0 : rp.picked_by_frac;
+    document.getElementById('wf-robust').innerHTML = `
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Majority-voted robust params</div>
+        <h3 class="text-xl font-bold text-accent-purple mt-1">
+            RSI ${rp.rsi_low}–${rp.rsi_high}, ADX ≥ ${rp.adx_min}
+        </h3>
+        <p class="text-sm text-ink-muted mt-3">
+            Picked in <span class="mono font-bold text-ink">${(frac * 100).toFixed(0)}%</span> of folds
+            (${Math.round(frac * (d.n_folds || 0))} / ${d.n_folds}).
+            Robust ≠ best — it just means these params survived across regimes.
+        </p>
+        <div class="text-xs text-ink-dim mono mt-3">
+            Full-period Sharpe with these params: <span class="${colorFor(d.robust_full_period_sharpe)}">${fmt(d.robust_full_period_sharpe)}</span>
+        </div>
+    `;
+
+    // --- Comparison table ---
+    document.getElementById('wf-range').textContent =
+        `${d.start} → ${d.end} · ${d.bars} bars · ${d.n_folds} folds · train ${d.train_bars} / test ${d.test_bars} / step ${d.step_bars} bars` +
+        (d.downsampled ? ' · grid downsampled to 3×3×3' : '');
+    const isob = d.in_sample_only_best || {};
+    const isoP = isob.params || {};
+    const cmp = [
+        {label: 'Baseline (defaults)', params: 'RSI 45–70, ADX ≥ 20',
+         sharpe: d.baseline_full_period_sharpe, ret: d.baseline_full_period_return_pct, tone: 'text-ink'},
+        {label: 'In-sample-only best', params: isoP.rsi_low ? `RSI ${isoP.rsi_low}–${isoP.rsi_high}, ADX ≥ ${isoP.adx_min}` : '—',
+         sharpe: isob.full_period_sharpe, ret: isob.full_period_return_pct, tone: 'text-accent-yellow',
+         note: '⚠ overfit to full sample'},
+        {label: 'Walk-forward robust', params: `RSI ${rp.rsi_low}–${rp.rsi_high}, ADX ≥ ${rp.adx_min}`,
+         sharpe: d.robust_full_period_sharpe, ret: d.robust_full_period_return_pct, tone: 'text-accent-purple',
+         note: 'majority across folds'},
+    ];
+    document.getElementById('wf-cmp-body').innerHTML = cmp.map(r => `
+        <tr class="border-t border-border">
+            <td class="py-2 px-2 ${r.tone} font-bold">${r.label}${r.note ? ` <span class="text-[10px] text-ink-dim font-normal mono">${r.note}</span>` : ''}</td>
+            <td class="py-2 px-2 mono text-ink-muted">${r.params}</td>
+            <td class="py-2 px-2 text-right mono font-bold ${colorFor(r.sharpe)}">${fmt(r.sharpe)}</td>
+            <td class="py-2 px-2 text-right mono ${colorFor(r.ret)}">${fmtPct(r.ret)}</td>
+        </tr>`).join('');
+
+    // --- Fold-by-fold table ---
+    document.getElementById('wf-folds-body').innerHTML = (d.folds || []).map((f, i) => {
+        const p = f.is_best_params || {};
+        return `<tr class="border-t border-border">
+            <td class="py-2 px-2 text-ink-dim mono">${i + 1}</td>
+            <td class="py-2 px-2 mono text-ink-muted">${f.train_start} → ${f.train_end}</td>
+            <td class="py-2 px-2 mono text-ink">${f.test_start} → ${f.test_end}</td>
+            <td class="py-2 px-2 text-right mono text-ink-muted">RSI ${p.rsi_low}–${p.rsi_high}, ADX≥${p.adx_min}</td>
+            <td class="py-2 px-2 text-right mono ${colorFor(f.is_sharpe)}">${fmt(f.is_sharpe)}</td>
+            <td class="py-2 px-2 text-right mono font-bold ${colorFor(f.oos_sharpe)}">${fmt(f.oos_sharpe)}</td>
+            <td class="py-2 px-2 text-right mono ${colorFor(f.oos_return_pct)}">${fmtPct(f.oos_return_pct)}</td>
+            <td class="py-2 px-2 text-right mono text-ink">${fmtInt(f.oos_trades)}</td>
+        </tr>`;
+    }).join('');
+    document.getElementById('wf-meta').textContent =
+        `IS-OOS gap mean: ${fmt(d.is_oos_gap_mean)} · median OOS Sharpe: ${fmt(d.median_oos_sharpe)}`;
+
+    // --- IS vs OOS chart ---
+    drawFoldChart(d.folds || []);
+}
+
+function drawFoldChart(folds) {
+    const canvas = document.getElementById('wf-chart');
+    const n = folds.length;
+    if (n === 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const padL = 50, padT = 20, padR = 20, padB = 60;
+    const groupW = Math.max(50, Math.min(90, Math.floor(700 / n)));
+    const barW = Math.floor(groupW * 0.4);
+    const w = padL + groupW * n + padR;
+    const h = 280;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    const allVals = [];
+    folds.forEach(f => {
+        if (f.is_sharpe !== null && f.is_sharpe !== undefined) allVals.push(f.is_sharpe);
+        if (f.oos_sharpe !== null && f.oos_sharpe !== undefined) allVals.push(f.oos_sharpe);
+    });
+    if (allVals.length === 0) return;
+    const yMax = Math.max(1, ...allVals.map(v => Math.abs(v)));
+    const plotH = h - padT - padB;
+    const zeroY = padT + plotH / 2;
+
+    // Zero line
+    ctx.strokeStyle = '#2b3860';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, zeroY);
+    ctx.lineTo(w - padR, zeroY);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = '#8a95b0';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    [yMax, yMax / 2, 0, -yMax / 2, -yMax].forEach(v => {
+        const y = zeroY - (v / yMax) * (plotH / 2);
+        ctx.fillText(v.toFixed(1), padL - 6, y);
+        ctx.strokeStyle = v === 0 ? '#2b3860' : '#1a2340';
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(w - padR, y);
+        ctx.stroke();
+    });
+
+    // Bars
+    folds.forEach((f, i) => {
+        const xBase = padL + i * groupW + groupW / 2;
+        const drawBar = (val, color, offset) => {
+            if (val === null || val === undefined || Number.isNaN(val)) return;
+            const barH = Math.abs(val / yMax) * (plotH / 2);
+            const y = val >= 0 ? zeroY - barH : zeroY;
+            ctx.fillStyle = color;
+            ctx.fillRect(xBase + offset - barW / 2, y, barW, barH);
+        };
+        drawBar(f.is_sharpe, '#5b9df9', -barW / 2 - 2);
+        drawBar(f.oos_sharpe, '#b691ff', barW / 2 + 2);
+
+        // X-axis label: fold number
+        ctx.fillStyle = '#8a95b0';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.font = '10px JetBrains Mono, monospace';
+        ctx.fillText('#' + (i + 1), xBase, h - padB + 4);
+        ctx.fillStyle = '#5c6784';
+        ctx.font = '9px JetBrains Mono, monospace';
+        ctx.fillText(f.test_start, xBase, h - padB + 18);
+        ctx.fillText('→ ' + f.test_end, xBase, h - padB + 30);
+    });
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '11px JetBrains Mono, monospace';
+    ctx.fillStyle = '#5b9df9';
+    ctx.fillRect(padL, padT - 8, 12, 12);
+    ctx.fillStyle = '#e7ecf5';
+    ctx.fillText('IS Sharpe', padL + 18, padT - 2);
+    ctx.fillStyle = '#b691ff';
+    ctx.fillRect(padL + 100, padT - 8, 12, 12);
+    ctx.fillStyle = '#e7ecf5';
+    ctx.fillText('OOS Sharpe', padL + 118, padT - 2);
+}
+</script>
+{% endblock %}

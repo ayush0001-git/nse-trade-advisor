@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}advisor{% endblock %} — NSE / BSE Trading Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        // Terminal-style palette: deeper blacks, cooler accents
+                        bg:      { DEFAULT: '#080b12', card: '#0f1524', sub: '#131a2d', hover: '#1a2340' },
+                        border:  { DEFAULT: '#1e2740', strong: '#2b3860' },
+                        accent: {
+                            green:  '#22d38a',   // buy / bull
+                            red:    '#ff5b6f',   // sell / bear
+                            yellow: '#ffbe4d',   // warning / watch
+                            blue:   '#5b9df9',   // info / primary
+                            purple: '#b691ff',   // ai / narration
+                            cyan:   '#4dd0e1',
+                        },
+                        ink: { DEFAULT: '#e7ecf5', muted: '#8a95b0', dim: '#5c6784' },
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+                    },
+                    boxShadow: {
+                        glow: '0 0 0 1px rgba(91,157,249,.15), 0 10px 40px -20px rgba(91,157,249,.3)',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { color-scheme: dark; }
+        html, body {
+            background:
+                radial-gradient(1200px 600px at 20% -10%, rgba(91,157,249,.10) 0, transparent 60%),
+                radial-gradient(1000px 500px at 90% 0%, rgba(182,145,255,.06) 0, transparent 55%),
+                #080b12;
+            color: #e7ecf5;
+        }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+        .mono, .num {
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-variant-numeric: tabular-nums lining-nums;
+            font-feature-settings: "tnum", "lnum", "zero";
+        }
+
+        /* Scoped transitions to avoid full-page flicker */
+        a, button, .card-hover, .transition-colors, [role="tab"] {
+            transition: background-color .15s, border-color .15s, color .15s, transform .15s, box-shadow .15s;
+        }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -18px rgba(91,157,249,.35); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f1524; }
+        ::-webkit-scrollbar-thumb { background: #2b3860; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b4a80; }
+
+        /* Ticker pills */
+        .ticker-pill {
+            display: inline-flex; align-items: center; gap: .45rem;
+            padding: .25rem .65rem; border-radius: 9999px;
+            background: rgba(15,21,36,.7);
+            border: 1px solid #1e2740;
+            font-size: 11px;
+        }
+        .ticker-up { color: #22d38a; }
+        .ticker-dn { color: #ff5b6f; }
+
+        /* Market status dot */
+        .mkt-open { background: #22d38a; box-shadow: 0 0 8px rgba(34,211,138,.6); }
+        .mkt-shut { background: #5c6784; }
+
+        /* Pulse */
+        @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+        .pulse-live { animation: pulse-live 1.5s infinite; }
+
+        /* Subtle grid overlay on hero areas */
+        .grid-bg {
+            background-image:
+                linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* Focus ring */
+        input:focus, select:focus, textarea:focus, button:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(91,157,249,.35);
+            border-color: #5b9df9 !important;
+        }
+
+        /* Progress bar */
+        .progress-bar-fill { transition: width 0.3s ease-in-out; }
+
+        /* Hero heading */
+        .headline {
+            background: linear-gradient(135deg, #ffffff 0%, #a8b3d6 100%);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+
+        /* Card: our new baseline */
+        .surface {
+            background: linear-gradient(180deg, #10162a 0%, #0d1322 100%);
+            border: 1px solid #1e2740;
+            border-radius: 14px;
+        }
+        .surface-hi { background: linear-gradient(180deg, #131a30 0%, #0f1524 100%); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Top Navigation -->
+    <nav class="border-b border-border sticky top-0 z-50 backdrop-blur bg-bg/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-6">
+                    <a href="/" class="flex items-center space-x-2">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center"
+                             style="background: linear-gradient(135deg,#22d38a 0%, #5b9df9 100%);">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 17l6-6 4 4 8-8"/>
+                            </svg>
+                        </div>
+                        <span class="text-lg font-bold tracking-tight">advisor<span class="text-accent-blue">.</span></span>
+                        <span class="text-[10px] uppercase tracking-widest text-ink-dim mono">terminal</span>
+                    </a>
+                    <div class="hidden md:flex items-center space-x-1">
+                        {% set navlinks = [
+                            ('/', 'Dashboard'),
+                            ('/discover', 'Discover'),
+                            ('/scan', 'Scan'),
+                            ('/council', 'Council'),
+                            ('/strategy-lab', 'Lab'),
+                            ('/history', 'Journal')
+                        ] %}
+                        {% for href, label in navlinks %}
+                        <a href="{{ href }}"
+                           class="px-3 py-1.5 rounded-md text-sm font-medium
+                           {% if request.path == href %}bg-accent-blue/15 text-accent-blue{% else %}text-ink-muted hover:text-ink hover:bg-bg-hover{% endif %}">
+                            {{ label }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div id="ticker-strip" class="hidden md:flex items-center gap-2"></div>
+                    <div id="market-status" class="hidden md:flex items-center gap-1.5 text-xs">
+                        <span id="mkt-dot" class="w-2 h-2 rounded-full mkt-shut"></span>
+                        <span id="mkt-label" class="mono text-ink-muted">—</span>
+                    </div>
+                    <div id="scan-indicator" class="hidden items-center gap-2 text-xs text-ink-muted">
+                        <div class="w-2 h-2 bg-accent-green rounded-full pulse-live"></div>
+                        <span class="mono">Scanning</span>
+                    </div>
+                    <div class="text-xs text-ink-dim mono" id="clock"></div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+                {% for category, message in messages %}
+                    <div class="mb-2 px-4 py-3 rounded-lg
+                        {% if category == 'error' %}bg-accent-red/15 border border-accent-red/40 text-accent-red
+                        {% elif category == 'success' %}bg-accent-green/15 border border-accent-green/40 text-accent-green
+                        {% else %}bg-accent-blue/15 border border-accent-blue/40 text-accent-blue{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-border mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p class="text-xs text-ink-dim text-center sm:text-left">
+                advisor — advisory only. Never places orders. Not investment advice. Validate with the backtester before risking real capital.
+            </p>
+            <p class="text-xs text-ink-dim mono">v2.1 · NSE / BSE</p>
+        </div>
+    </footer>
+
+    <script>
+        // Live clock (IST)
+        function updateClock() {
+            const now = new Date();
+            const opts = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' };
+            const el = document.getElementById('clock');
+            if (el) el.textContent = now.toLocaleTimeString('en-IN', opts) + ' IST';
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // Scan status
+        async function pollScanStatus() {
+            try {
+                const res = await fetch('/api/scan/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                const indicator = document.getElementById('scan-indicator');
+                if (data.running) {
+                    if (indicator) { indicator.classList.remove('hidden'); indicator.classList.add('flex'); }
+                    const bar = document.getElementById('progress-fill');
+                    const text = document.getElementById('progress-text');
+                    const current = document.getElementById('current-symbol');
+                    if (bar) bar.style.width = `${(data.progress / (data.total || 1) * 100).toFixed(1)}%`;
+                    if (text) text.textContent = `${data.progress} / ${data.total}`;
+                    if (current) current.textContent = data.current_symbol;
+                } else if (indicator) {
+                    indicator.classList.add('hidden');
+                    indicator.classList.remove('flex');
+                }
+            } catch (e) {}
+        }
+        pollScanStatus();
+        setInterval(pollScanStatus, 1500);
+
+        // Live index ticker
+        async function pollTicker() {
+            try {
+                const res = await fetch('/api/ticker');
+                if (!res.ok) return;
+                const data = await res.json();
+                const strip = document.getElementById('ticker-strip');
+                if (strip && data.indices) {
+                    strip.innerHTML = Object.entries(data.indices).map(([k, v]) => {
+                        if (!v) return `<span class="ticker-pill"><span class="text-ink-dim">${k}</span><span class="mono text-ink-dim">—</span></span>`;
+                        const cls = v.chg >= 0 ? 'ticker-up' : 'ticker-dn';
+                        const arrow = v.chg >= 0 ? '▲' : '▼';
+                        return `<span class="ticker-pill">
+                            <span class="text-ink-muted">${k}</span>
+                            <span class="mono font-semibold">${v.price.toLocaleString('en-IN')}</span>
+                            <span class="mono ${cls}">${arrow} ${Math.abs(v.pct).toFixed(2)}%</span>
+                        </span>`;
+                    }).join('');
+                    strip.classList.remove('hidden');
+                    strip.classList.add('flex');
+                }
+                const dot = document.getElementById('mkt-dot');
+                const lbl = document.getElementById('mkt-label');
+                if (dot && lbl) {
+                    dot.className = 'w-2 h-2 rounded-full ' + (data.market_open ? 'mkt-open pulse-live' : 'mkt-shut');
+                    lbl.textContent = data.market_open ? 'LIVE' : 'CLOSED';
+                    lbl.className = 'mono ' + (data.market_open ? 'text-accent-green' : 'text-ink-dim');
+                }
+            } catch (e) {}
+        }
+        pollTicker();
+        setInterval(pollTicker, 30000);
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

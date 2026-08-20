@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Trade History{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-start justify-between gap-4 flex-wrap">
+    <div>
+        <h1 class="text-3xl font-bold mb-2">Trade History</h1>
+        <p class="text-slate-400">Every trade logged in your journal — open and closed.</p>
+    </div>
+    <a href="/tearsheet"
+       class="px-4 py-2 rounded-lg text-sm font-medium bg-accent-purple/15 text-accent-purple border border-accent-purple/40 hover:bg-accent-purple/25 mono">
+        Full tearsheet →
+    </a>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+    <div class="surface p-4">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Closed</div>
+        <div class="text-2xl font-bold mono">{{ stats.closed_trades or 0 }}</div>
+    </div>
+    <div class="surface p-4">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Open</div>
+        <div class="text-2xl font-bold mono text-accent-blue">{{ open_trades|length }}</div>
+    </div>
+    <div class="surface p-4">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Win rate</div>
+        <div class="text-2xl font-bold mono {% if stats.win_rate and stats.win_rate >= 0.5 %}text-accent-green{% elif stats.win_rate %}text-accent-yellow{% else %}text-ink-dim{% endif %}">
+            {% if stats.win_rate %}{{ (stats.win_rate * 100)|round(1) }}%{% else %}—{% endif %}
+        </div>
+    </div>
+    <div class="surface p-4">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Expectancy</div>
+        <div class="text-2xl font-bold mono {% if stats.expectancy_r and stats.expectancy_r > 0 %}text-accent-green{% elif stats.expectancy_r %}text-accent-red{% else %}text-ink-dim{% endif %}">
+            {% if stats.expectancy_r is not none %}{{ stats.expectancy_r|round(2) }}R{% else %}—{% endif %}
+        </div>
+    </div>
+    <div class="surface p-4"
+         title="Deflated Sharpe Ratio (Lopez de Prado 2014): probability that your observed Sharpe is real edge, not luck. >0.95 = strong evidence. <0.5 = probably just noise.">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">DSR</div>
+        <div class="text-2xl font-bold mono
+            {% if stats.deflated_sharpe is not none and stats.deflated_sharpe >= 0.95 %}text-accent-green
+            {% elif stats.deflated_sharpe is not none and stats.deflated_sharpe >= 0.75 %}text-accent-yellow
+            {% else %}text-ink-dim{% endif %}">
+            {% if stats.deflated_sharpe is not none %}{{ (stats.deflated_sharpe * 100)|round(0)|int }}%{% else %}—{% endif %}
+        </div>
+        <div class="text-xs text-ink-dim mt-1">{{ stats.dsr_verdict or "collect trades" }}</div>
+    </div>
+    <div class="surface p-4">
+        <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Total P&amp;L</div>
+        <div class="text-2xl font-bold mono {% if stats.total_pnl and stats.total_pnl > 0 %}text-accent-green{% elif stats.total_pnl %}text-accent-red{% else %}text-ink-dim{% endif %}">
+            ₹{{ "%.0f"|format(stats.total_pnl or 0) }}
+        </div>
+    </div>
+</div>
+
+{% if stats.message %}
+<div class="bg-bg-card rounded-xl border border-slate-700 p-4 mb-6 text-sm text-slate-300">
+    {{ stats.message }}
+</div>
+{% endif %}
+
+<!-- Close trade form -->
+<div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-6">
+    <h2 class="text-lg font-bold mb-3">Close a Trade</h2>
+    <form id="close-form" class="flex flex-wrap items-end gap-3">
+        <div>
+            <label class="text-xs text-slate-400 uppercase">Trade #</label>
+            <input type="number" name="trade_id" min="1" required placeholder="1"
+                   class="w-24 mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono focus:outline-none focus:border-accent-blue">
+        </div>
+        <div>
+            <label class="text-xs text-slate-400 uppercase">Exit Price ₹</label>
+            <input type="number" name="exit_price" min="0.01" step="0.01" required placeholder="1450"
+                   class="w-32 mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono focus:outline-none focus:border-accent-blue">
+        </div>
+        <button type="submit" class="px-5 py-2 bg-accent-red hover:bg-red-600 text-white rounded-lg font-medium">
+            Close Trade
+        </button>
+    </form>
+</div>
+
+<!-- All trades table -->
+<div class="bg-bg-card rounded-xl border border-slate-700 overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-800/50 text-xs text-slate-400 uppercase">
+            <tr>
+                <th class="text-left px-4 py-3">#</th>
+                <th class="text-left px-4 py-3">Symbol</th>
+                <th class="text-left px-4 py-3">Dir</th>
+                <th class="text-right px-4 py-3">Qty</th>
+                <th class="text-right px-4 py-3">Entry</th>
+                <th class="text-right px-4 py-3">Stop</th>
+                <th class="text-right px-4 py-3">Target</th>
+                <th class="text-right px-4 py-3">Exit</th>
+                <th class="text-right px-4 py-3">R</th>
+                <th class="text-right px-4 py-3">P&amp;L ₹</th>
+                <th class="text-center px-4 py-3">Status</th>
+                <th class="text-center px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in trades %}
+            <tr class="border-t border-slate-700 hover:bg-bg-hover">
+                <td class="px-4 py-3 mono text-slate-400">{{ t.id }}</td>
+                <td class="px-4 py-3 font-semibold">
+                    <a href="/stock/{{ t.symbol.split('.')[0] }}" class="hover:text-accent-blue hover:underline">{{ t.symbol.split('.')[0] }}</a>
+                </td>
+                <td class="px-4 py-3 mono
+                    {% if t.direction == 'long' %}text-accent-green{% else %}text-accent-red{% endif %}">
+                    {% if t.direction == 'long' %}▲{% else %}▼{% endif %} {{ t.direction|upper }}
+                </td>
+                <td class="px-4 py-3 text-right mono">{{ t.quantity }}</td>
+                <td class="px-4 py-3 text-right mono">₹{{ "%.1f"|format(t.entry) }}</td>
+                <td class="px-4 py-3 text-right mono text-accent-red">₹{{ "%.1f"|format(t.stop) }}</td>
+                <td class="px-4 py-3 text-right mono text-accent-green">₹{{ "%.1f"|format(t.target) }}</td>
+                <td class="px-4 py-3 text-right mono">
+                    {% if t.exit_price %}₹{{ "%.1f"|format(t.exit_price) }}{% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right mono
+                    {% if t.outcome_r and t.outcome_r > 0 %}text-accent-green
+                    {% elif t.outcome_r %}text-accent-red
+                    {% else %}text-slate-500{% endif %}">
+                    {% if t.outcome_r is not none %}{{ "%.2f"|format(t.outcome_r) }}R{% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right mono
+                    {% if t.pnl and t.pnl > 0 %}text-accent-green
+                    {% elif t.pnl %}text-accent-red
+                    {% else %}text-slate-500{% endif %}">
+                    {% if t.pnl is not none %}₹{{ "%.0f"|format(t.pnl) }}{% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-1 text-xs rounded mono
+                        {% if t.status == 'open' %}bg-accent-blue/20 text-accent-blue
+                        {% elif t.pnl and t.pnl > 0 %}bg-accent-green/20 text-accent-green
+                        {% else %}bg-accent-red/20 text-accent-red{% endif %}">
+                        {{ t.status|upper }}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <button onclick="deleteTrade({{ t.id }}, '{{ t.symbol.split('.')[0] }}', this)"
+                            title="Delete this trade from the journal"
+                            class="text-xs px-2 py-1 rounded text-ink-dim hover:text-accent-red hover:bg-accent-red/10">
+                        🗑
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not trades %}
+            <tr>
+                <td colspan="12" class="px-4 py-8 text-center text-slate-500">
+                    No trades logged yet. Run a scan, then click any stock to log a trade.
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('close-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    const payload = {
+        trade_id: parseInt(form.trade_id.value),
+        exit_price: parseFloat(form.exit_price.value),
+    };
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch('/api/journal/close', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert(`Closed trade #${data.id}: ${data.outcome_r >= 0 ? '+' : ''}${data.outcome_r}R, P&L ₹${data.pnl.toFixed(2)}`);
+            window.location.reload();
+        } else {
+            alert('Failed: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+});
+
+async function deleteTrade(tradeId, symbol, btn) {
+    if (!confirm(`Delete trade #${tradeId} (${symbol}) permanently?\n\nThis removes it from your journal and your stats. Cannot be undone.`)) return;
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch('/api/journal/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trade_id: tradeId }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            alert('Failed: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

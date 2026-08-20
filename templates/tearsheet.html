@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Tearsheet{% endblock %}
+
+{% block content %}
+<div class="flex items-start justify-between mb-6 gap-4 flex-wrap">
+    <div>
+        <div class="text-xs text-ink-dim mono uppercase tracking-widest mb-1">
+            <a href="/history" class="hover:text-accent-blue">Journal</a> / Tearsheet
+        </div>
+        <h1 class="text-3xl font-bold mb-1">Tearsheet <span class="text-ink-dim">.</span> Journal analysis</h1>
+        <p class="text-ink-muted text-sm">
+            Institutional-grade QuantStats report built from every closed trade
+            in your journal. Rolling Sharpe, VaR/CVaR, monthly heatmap, Monte
+            Carlo drawdowns, and NIFTY (^NSEI) benchmark.
+        </p>
+    </div>
+    <div class="flex items-center gap-2">
+        {% if generated_at %}
+        <span class="text-xs text-ink-dim mono">last built {{ generated_at }}</span>
+        {% endif %}
+        <button id="regen-btn"
+                class="px-4 py-2 rounded-lg text-sm font-medium
+                       bg-accent-blue/15 text-accent-blue border border-accent-blue/40
+                       hover:bg-accent-blue/25">
+            Regenerate
+        </button>
+    </div>
+</div>
+
+{% if n_closed < 3 %}
+<div class="surface p-8 text-center">
+    <div class="text-5xl mb-3">📊</div>
+    <h2 class="text-xl font-bold mb-2">Need at least 3 closed trades</h2>
+    <p class="text-ink-muted mb-4">
+        You currently have <span class="mono text-accent-yellow">{{ n_closed }}</span>
+        closed trade(s) in the journal. QuantStats needs at least 3 to build a
+        meaningful returns series with variance.
+    </p>
+    <a href="/history" class="inline-block px-4 py-2 rounded-lg text-sm bg-bg-hover border border-border hover:border-accent-blue">
+        Back to Journal
+    </a>
+</div>
+{% else %}
+    <div id="status-bar" class="hidden mb-4 px-4 py-3 rounded-lg bg-accent-blue/10 border border-accent-blue/30 text-accent-blue text-sm mono"></div>
+
+    {% if exists %}
+    <div class="surface overflow-hidden">
+        <iframe id="ts-frame"
+                src="/tearsheet/view?ts={{ generated_at|replace(' ', '_')|replace(':', '') }}"
+                class="w-full block"
+                style="min-height: 90vh; border: 0; background: #fff;">
+        </iframe>
+    </div>
+    {% else %}
+    <div class="surface p-8 text-center">
+        <p class="text-ink-muted mb-4">No tearsheet yet. Click Regenerate to build one from your {{ n_closed }} closed trade(s).</p>
+        <button id="build-first-btn"
+                class="px-4 py-2 rounded-lg bg-accent-blue/20 text-accent-blue border border-accent-blue/40 hover:bg-accent-blue/30 text-sm">
+            Build now
+        </button>
+    </div>
+    {% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function regenerateTearsheet() {
+    const bar = document.getElementById('status-bar');
+    const btn = document.getElementById('regen-btn');
+    const buildBtn = document.getElementById('build-first-btn');
+    if (bar) {
+        bar.classList.remove('hidden');
+        bar.textContent = 'Generating tearsheet · this can take 10-20 seconds…';
+    }
+    if (btn) btn.disabled = true;
+    if (buildBtn) buildBtn.disabled = true;
+    try {
+        const res = await fetch('/api/tearsheet/generate');
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+            if (bar) {
+                bar.textContent = `Built · ${data.trades_used} return-days · benchmark: ${data.benchmark_loaded ? data.benchmark : 'none'} · reloading…`;
+            }
+            const frame = document.getElementById('ts-frame');
+            const cacheBust = '?ts=' + Date.now();
+            if (frame) {
+                frame.src = '/tearsheet/view' + cacheBust;
+                setTimeout(() => window.location.reload(), 1200);
+            } else {
+                window.location.reload();
+            }
+        } else {
+            if (bar) {
+                bar.className = 'mb-4 px-4 py-3 rounded-lg bg-accent-red/10 border border-accent-red/30 text-accent-red text-sm mono';
+                bar.textContent = 'Failed: ' + (data.error || 'unknown error');
+            }
+        }
+    } catch (e) {
+        if (bar) {
+            bar.className = 'mb-4 px-4 py-3 rounded-lg bg-accent-red/10 border border-accent-red/30 text-accent-red text-sm mono';
+            bar.textContent = 'Network error: ' + e.message;
+        }
+    } finally {
+        if (btn) btn.disabled = false;
+        if (buildBtn) buildBtn.disabled = false;
+    }
+}
+document.getElementById('regen-btn')?.addEventListener('click', regenerateTearsheet);
+document.getElementById('build-first-btn')?.addEventListener('click', regenerateTearsheet);
+</script>
+{% endblock %}

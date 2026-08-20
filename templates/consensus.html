@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Consensus Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold mb-2">Consensus Dashboard</h1>
+    <p class="text-slate-400">The ultimate conviction score — aggregates all 5 engines into a single 0-100 rating.</p>
+</div>
+
+<!-- Stock picker -->
+<div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-6">
+    <form id="consensus-form" class="flex flex-wrap items-end gap-3">
+        <div class="flex-1 min-w-[200px]">
+            <label class="text-xs text-slate-400 uppercase">Symbol</label>
+            <input type="text" name="symbol" placeholder="RELIANCE" required value="RELIANCE"
+                   class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mono uppercase focus:outline-none focus:border-accent-blue">
+        </div>
+        <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-accent-blue to-accent-purple hover:opacity-90 text-white rounded-lg font-medium">
+            Compute Consensus
+        </button>
+    </form>
+    <p class="text-xs text-slate-500 mt-2">Runs: advisor + RL agent + sector rotation + 16 strategies + 10 candlestick patterns → one score.</p>
+</div>
+
+<!-- Loading -->
+<div id="loading" class="hidden text-center py-12">
+    <div class="inline-block animate-pulse text-accent-blue text-lg">↻ Analyzing across 5 engines (this takes 10-30 seconds)...</div>
+</div>
+
+<!-- Error -->
+<div id="error" class="hidden bg-accent-red/20 border border-accent-red text-accent-red rounded-xl p-4"></div>
+
+<!-- Result -->
+<div id="result" class="hidden">
+    <!-- Hero score card -->
+    <div class="bg-bg-card rounded-2xl border border-slate-700 p-8 mb-6 text-center">
+        <div class="text-sm text-slate-400 uppercase mb-2" id="result-symbol">—</div>
+        <div class="text-7xl font-bold mono mb-2" id="conviction-score">—</div>
+        <div class="text-xl font-bold mb-3" id="conviction-bias">—</div>
+        <div class="inline-block px-4 py-2 rounded-full text-sm" id="conviction-interpretation">—</div>
+        <div class="grid grid-cols-3 gap-4 mt-6 max-w-2xl mx-auto">
+            <div>
+                <div class="text-xs text-slate-400 uppercase">Agreement</div>
+                <div class="text-2xl font-bold mono" id="agreement-pct">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase">Signed Score</div>
+                <div class="text-2xl font-bold mono" id="signed-score">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-400 uppercase">Current Price</div>
+                <div class="text-2xl font-bold mono" id="current-price">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Component breakdown -->
+    <h2 class="text-2xl font-bold mb-4">Engine Breakdown</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-8" id="components-grid"></div>
+
+    <!-- Two-column: Strategy signals + Pattern detection -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- 16 Strategy Signals -->
+        <div>
+            <h3 class="text-lg font-bold mb-3">16 Strategy Signals</h3>
+            <div class="bg-bg-card rounded-xl border border-slate-700 p-4">
+                <div id="strategies-list" class="space-y-1 max-h-96 overflow-y-auto"></div>
+            </div>
+        </div>
+        <!-- 10 Candlestick Patterns -->
+        <div>
+            <h3 class="text-lg font-bold mb-3">10 Candlestick Patterns</h3>
+            <div class="bg-bg-card rounded-xl border border-slate-700 p-4">
+                <div id="patterns-list" class="space-y-1"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const signalColors = {BUY: 'text-accent-green', SELL: 'text-accent-red', HOLD: 'text-slate-400'};
+const signalBg = {BUY: 'bg-accent-green/10', SELL: 'bg-accent-red/10', HOLD: 'bg-slate-800/30'};
+
+async function computeConsensus(symbol) {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const result = document.getElementById('result');
+    loading.classList.remove('hidden');
+    error.classList.add('hidden');
+    result.classList.add('hidden');
+
+    try {
+        const res = await fetch(`/api/consensus/${symbol}`);
+        const data = await res.json();
+        loading.classList.add('hidden');
+
+        if (!res.ok || data.error) {
+            error.textContent = data.error || 'Failed to compute consensus';
+            error.classList.remove('hidden');
+            return;
+        }
+
+        const c = data.consensus;
+        if (!c.available) {
+            error.textContent = 'No opinion engines available';
+            error.classList.remove('hidden');
+            return;
+        }
+
+        // Hero score
+        document.getElementById('result-symbol').textContent = data.symbol + (data.current_price ? `  •  ₹${data.current_price.toFixed(2)}` : '');
+        const scoreEl = document.getElementById('conviction-score');
+        scoreEl.textContent = c.conviction;
+        // Color by conviction level
+        let color = 'text-slate-400';
+        if (c.conviction >= 80) color = 'text-accent-green';
+        else if (c.conviction >= 50) color = 'text-accent-yellow';
+        else if (c.conviction >= 30) color = 'text-orange-400';
+        else color = 'text-accent-red';
+        scoreEl.className = `text-7xl font-bold mono mb-2 ${color}`;
+
+        document.getElementById('conviction-bias').textContent = c.bias;
+        document.getElementById('conviction-bias').className = 'text-xl font-bold mb-3 ' +
+            (c.bias.includes('BULLISH') ? 'text-accent-green' :
+             c.bias.includes('BEARISH') ? 'text-accent-red' : 'text-slate-300');
+
+        const interp = document.getElementById('conviction-interpretation');
+        interp.textContent = c.interpretation;
+        interp.className = 'inline-block px-4 py-2 rounded-full text-sm ' +
+            (c.conviction >= 65 ? 'bg-accent-green/20 text-accent-green' :
+             c.conviction >= 30 ? 'bg-accent-yellow/20 text-accent-yellow' :
+             'bg-accent-red/20 text-accent-red');
+
+        document.getElementById('agreement-pct').textContent = c.agreement_pct + '%';
+        document.getElementById('signed-score').textContent = (c.signed_score > 0 ? '+' : '') + c.signed_score;
+        document.getElementById('current-price').textContent = data.current_price ? '₹' + data.current_price.toFixed(2) : '—';
+
+        // Component breakdown
+        const grid = document.getElementById('components-grid');
+        grid.innerHTML = '';
+        const componentNames = {
+            advisor: {label: 'Advisor', color: 'blue', icon: '🧠'},
+            rl: {label: 'RL Agent', color: 'purple', icon: '🤖'},
+            sector: {label: 'Sector', color: 'yellow', icon: '🌐'},
+            strategies: {label: '16 Strategies', color: 'green', icon: '📊'},
+            patterns: {label: '10 Patterns', color: 'red', icon: '🕯️'},
+        };
+        for (const [key, score] of Object.entries(c.components)) {
+            const meta = componentNames[key] || {label: key, color: 'slate', icon: '•'};
+            const card = document.createElement('div');
+            card.className = `bg-bg-card rounded-xl border border-slate-700 p-4`;
+            const sign = score > 20 ? 'bullish' : score < -20 ? 'bearish' : 'neutral';
+            const signColor = sign === 'bullish' ? 'text-accent-green' : sign === 'bearish' ? 'text-accent-red' : 'text-slate-400';
+            card.innerHTML = `
+                <div class="text-xs text-slate-400 uppercase mb-1">${meta.icon} ${meta.label}</div>
+                <div class="text-2xl font-bold mono ${signColor}">${score > 0 ? '+' : ''}${score}</div>
+                <div class="text-xs ${signColor} capitalize">${sign}</div>
+                <div class="text-xs text-slate-500 mt-1">weight: ${(c.weights_used[key] * 100).toFixed(0)}%</div>
+            `;
+            grid.appendChild(card);
+        }
+
+        // Strategy signals list
+        const stratList = document.getElementById('strategies-list');
+        stratList.innerHTML = '';
+        const strats = data.components.strategies;
+        if (strats && strats.signals) {
+            let nBuy = 0, nSell = 0, nHold = 0;
+            for (const [key, s] of Object.entries(strats.signals)) {
+                if (s.signal === 'BUY') nBuy++;
+                else if (s.signal === 'SELL') nSell++;
+                else nHold++;
+                const row = document.createElement('div');
+                row.className = `flex items-center justify-between px-2 py-1 rounded ${signalBg[s.signal] || signalBg.HOLD}`;
+                row.innerHTML = `
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs font-semibold truncate">${s.name}</div>
+                        <div class="text-xs text-slate-500 truncate">${s.source}</div>
+                    </div>
+                    <div class="text-sm font-bold mono ml-2 ${signalColors[s.signal] || signalColors.HOLD}">${s.signal}</div>
+                `;
+                stratList.appendChild(row);
+            }
+            const summary = document.createElement('div');
+            summary.className = 'mt-2 pt-2 border-t border-slate-700 text-xs text-slate-400 text-center';
+            summary.textContent = `${nBuy} BUY · ${nHold} HOLD · ${nSell} SELL`;
+            stratList.insertBefore(summary, stratList.firstChild);
+        } else {
+            stratList.innerHTML = '<div class="text-sm text-slate-500 italic">Not available</div>';
+        }
+
+        // Patterns list
+        const patList = document.getElementById('patterns-list');
+        patList.innerHTML = '';
+        const pats = data.components.patterns;
+        if (pats && !pats.error) {
+            if (pats.patterns_found && pats.patterns_found.length > 0) {
+                for (const p of pats.bullish_patterns || []) {
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between px-2 py-1 rounded bg-accent-green/10';
+                    row.innerHTML = `<div class="text-xs"><b>+ ${p.name}</b><div class="text-slate-500">${p.description}</div></div>`;
+                    patList.appendChild(row);
+                }
+                for (const p of pats.bearish_patterns || []) {
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between px-2 py-1 rounded bg-accent-red/10';
+                    row.innerHTML = `<div class="text-xs"><b>− ${p.name}</b><div class="text-slate-500">${p.description}</div></div>`;
+                    patList.appendChild(row);
+                }
+            } else {
+                patList.innerHTML = '<div class="text-sm text-slate-500 italic">No candlestick patterns detected on latest bar.</div>';
+            }
+            const summary = document.createElement('div');
+            summary.className = 'mt-2 pt-2 border-t border-slate-700 text-xs text-slate-400 text-center';
+            summary.textContent = `${pats.n_bullish || 0} bullish · ${pats.n_bearish || 0} bearish · bias: ${pats.bias || 'neutral'}`;
+            patList.insertBefore(summary, patList.firstChild);
+        } else {
+            patList.innerHTML = '<div class="text-sm text-slate-500 italic">Not available</div>';
+        }
+
+        result.classList.remove('hidden');
+    } catch (e) {
+        loading.classList.add('hidden');
+        error.textContent = 'Network error: ' + e.message;
+        error.classList.remove('hidden');
+    }
+}
+
+document.getElementById('consensus-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    computeConsensus(e.target.symbol.value);
+});
+
+// Auto-load RELIANCE on page load
+computeConsensus('RELIANCE');
+</script>
+{% endblock %}

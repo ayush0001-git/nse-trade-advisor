@@ -1,0 +1,531 @@
+{
+  "total_books": 99,
+  "categories": 15,
+  "books_by_category": {
+    "investing_classics": [
+      {
+        "title": "The Intelligent Investor",
+        "author": "Benjamin Graham",
+        "category": "Value Investing"
+      },
+      {
+        "title": "Security Analysis",
+        "author": "Benjamin Graham & David Dodd",
+        "category": "Value Investing"
+      },
+      {
+        "title": "Common Stocks and Uncommon Profits",
+        "author": "Philip Fisher",
+        "category": "Growth Investing"
+      },
+      {
+        "title": "One Up On Wall Street",
+        "author": "Peter Lynch",
+        "category": "Growth Investing"
+      },
+      {
+        "title": "Beating The Street",
+        "author": "Peter Lynch",
+        "category": "Growth Investing"
+      },
+      {
+        "title": "The Essays of Warren Buffett",
+        "author": "Warren Buffett (ed. Cunningham)",
+        "category": "Value Investing"
+      },
+      {
+        "title": "Margin of Safety",
+        "author": "Seth Klarman",
+        "category": "Value Investing"
+      },
+      {
+        "title": "Poor Charlie's Almanack",
+        "author": "Charlie Munger",
+        "category": "Mental Models"
+      },
+      {
+        "title": "The Most Important Thing",
+        "author": "Howard Marks",
+        "category": "Risk & Cycles"
+      },
+      {
+        "title": "You Can Be A Stock Market Genius",
+        "author": "Joel Greenblatt",
+        "category": "Special Situations"
+      }
+    ],
+    "market_wizards": [
+      {
+        "title": "Market Wizards",
+        "author": "Jack Schwager",
+        "category": "Trader Interviews"
+      },
+      {
+        "title": "The New Market Wizards",
+        "author": "Jack Schwager",
+        "category": "Trader Interviews"
+      },
+      {
+        "title": "Stock Market Wizards",
+        "author": "Jack Schwager",
+        "category": "Trader Interviews"
+      },
+      {
+        "title": "Unknown Market Wizards",
+        "author": "Jack Schwager",
+        "category": "Trader Interviews"
+      },
+      {
+        "title": "Reminiscences of a Stock Operator",
+        "author": "Edwin Lef\u00e8vre",
+        "category": "Classic Memoir"
+      }
+    ],
+    "technical_analysis": [
+      {
+        "title": "Technical Analysis of the Financial Markets",
+        "author": "John Murphy",
+        "category": "TA Reference"
+      },
+      {
+        "title": "Encyclopedia of Chart Patterns",
+        "author": "Thomas Bulkowski",
+        "category": "Chart Patterns"
+      },
+      {
+        "title": "The Art and Science of Technical Analysis",
+        "author": "Adam Grimes",
+        "category": "TA"
+      },
+      {
+        "title": "Japanese Candlestick Charting Techniques",
+        "author": "Steve Nison",
+        "category": "Candlesticks"
+      },
+      {
+        "title": "Trading Price Action Trends",
+        "author": "Al Brooks",
+        "category": "Price Action"
+      },
+      {
+        "title": "Trading Price Action Trading Ranges",
+        "author": "Al Brooks",
+        "category": "Price Action"
+      },
+      {
+        "title": "Trading Price Action Reversals",
+        "author": "Al Brooks",
+        "category": "Price Action"
+      },
+      {
+        "title": "How to Make Money in Stocks",
+        "author": "William O'Neil",
+        "category": "CANSLIM"
+      },
+      {
+        "title": "Mastering the Trade",
+        "author": "John Carter",
+        "category": "Day Trading"
+      },
+      {
+        "title": "High Probability Trading",
+        "author": "Marcel Link",
+        "category": "Trading"
+      }
+    ],
+    "quantitative_finance": [
+      {
+        "title": "Advances in Financial Machine Learning",
+        "author": "Marcos L\u00f3pez de Prado",
+        "category": "ML for Finance"
+      },
+      {
+        "title": "Machine Learning for Asset Managers",
+        "author": "Marcos L\u00f3pez de Prado",
+        "category": "ML for Finance"
+      },
+      {
+        "title": "Algorithmic Trading",
+        "author": "Ernest Chan",
+        "category": "Algo Trading"
+      },
+      {
+        "title": "Quantitative Trading",
+        "author": "Ernest Chan",
+        "category": "Quant Trading"
+      },
+      {
+        "title": "Inside the Black Box",
+        "author": "Rishi Narang",
+        "category": "Quant Funds"
+      },
+      {
+        "title": "Expected Returns",
+        "author": "Antti Ilmanen",
+        "category": "Asset Returns"
+      },
+      {
+        "title": "Active Portfolio Management",
+        "author": "Grinold & Kahn",
+        "category": "Portfolio Mgmt"
+      },
+      {
+        "title": "Systematic Trading",
+        "author": "Robert Carver",
+        "category": "Systematic"
+      },
+      {
+        "title": "Evidence-Based Technical Analysis",
+        "author": "David Aronson",
+        "category": "TA Validation"
+      },
+      {
+        "title": "Algorithmic and High-Frequency Trading",
+        "author": "Cartea, Jaimungal, Penalva",
+        "category": "HFT"
+      }
+    ],
+    "market_microstructure": [
+      {
+        "title": "Trading and Exchanges",
+        "author": "Larry Harris",
+        "category": "Microstructure"
+      },
+      {
+        "title": "Market Microstructure Theory",
+        "author": "Maureen O'Hara",
+        "category": "Microstructure"
+      },
+      {
+        "title": "Algorithmic Trading and DMA",
+        "author": "Barry Johnson",
+        "category": "Execution"
+      },
+      {
+        "title": "The Microstructure Approach to Exchange Rates",
+        "author": "Richard Lyons",
+        "category": "FX Microstructure"
+      },
+      {
+        "title": "Trades Quotes and Prices",
+        "author": "Hasbrouck",
+        "category": "Microstructure"
+      }
+    ],
+    "options_volatility": [
+      {
+        "title": "Option Volatility and Pricing",
+        "author": "Sheldon Natenberg",
+        "category": "Options"
+      },
+      {
+        "title": "Trading Option Greeks",
+        "author": "Dan Passarelli",
+        "category": "Greeks"
+      },
+      {
+        "title": "Volatility Trading",
+        "author": "Euan Sinclair",
+        "category": "Vol Trading"
+      },
+      {
+        "title": "Positional Option Trading",
+        "author": "Euan Sinclair",
+        "category": "Options"
+      },
+      {
+        "title": "Options Futures and Other Derivatives",
+        "author": "John Hull",
+        "category": "Derivatives"
+      }
+    ],
+    "risk_management": [
+      {
+        "title": "Against the Gods",
+        "author": "Peter Bernstein",
+        "category": "Risk History"
+      },
+      {
+        "title": "Fooled by Randomness",
+        "author": "Nassim Taleb",
+        "category": "Probability"
+      },
+      {
+        "title": "The Black Swan",
+        "author": "Nassim Taleb",
+        "category": "Tail Risk"
+      },
+      {
+        "title": "Antifragile",
+        "author": "Nassim Taleb",
+        "category": "Antifragility"
+      },
+      {
+        "title": "Dynamic Hedging",
+        "author": "Nassim Taleb",
+        "category": "Options Risk"
+      }
+    ],
+    "psychology": [
+      {
+        "title": "Trading in the Zone",
+        "author": "Mark Douglas",
+        "category": "Trading Psychology"
+      },
+      {
+        "title": "The Disciplined Trader",
+        "author": "Mark Douglas",
+        "category": "Trading Psychology"
+      },
+      {
+        "title": "The Daily Trading Coach",
+        "author": "Ari Kiev",
+        "category": "Trading Psychology"
+      },
+      {
+        "title": "Enhancing Trader Performance",
+        "author": "Brett Steenbarger",
+        "category": "Trading Psychology"
+      },
+      {
+        "title": "Thinking Fast and Slow",
+        "author": "Daniel Kahneman",
+        "category": "Behavioral Finance"
+      }
+    ],
+    "economics_macro": [
+      {
+        "title": "Principles for Dealing with the Changing World Order",
+        "author": "Ray Dalio",
+        "category": "Macro"
+      },
+      {
+        "title": "Principles",
+        "author": "Ray Dalio",
+        "category": "Decision Making"
+      },
+      {
+        "title": "Manias Panics and Crashes",
+        "author": "Charles Kindleberger",
+        "category": "Financial Crises"
+      },
+      {
+        "title": "The Alchemy of Finance",
+        "author": "George Soros",
+        "category": "Macro"
+      },
+      {
+        "title": "Big Debt Crises",
+        "author": "Ray Dalio",
+        "category": "Debt Cycles"
+      }
+    ],
+    "financial_history": [
+      {
+        "title": "Extraordinary Popular Delusions and the Madness of Crowds",
+        "author": "Charles Mackay",
+        "category": "Bubbles"
+      },
+      {
+        "title": "Devil Take the Hindmost",
+        "author": "Edward Chancellor",
+        "category": "Speculation History"
+      },
+      {
+        "title": "Lords of Finance",
+        "author": "Liaquat Ahamed",
+        "category": "Central Banking"
+      },
+      {
+        "title": "When Genius Failed",
+        "author": "Roger Lowenstein",
+        "category": "LTCM"
+      },
+      {
+        "title": "Too Big to Fail",
+        "author": "Andrew Ross Sorkin",
+        "category": "2008 Crisis"
+      }
+    ],
+    "hedge_funds": [
+      {
+        "title": "More Money Than God",
+        "author": "Sebastian Mallaby",
+        "category": "Hedge Fund History"
+      },
+      {
+        "title": "The Man Who Solved the Market",
+        "author": "Gregory Zuckerman",
+        "category": "Jim Simons/Renaissance"
+      },
+      {
+        "title": "The Quants",
+        "author": "Scott Patterson",
+        "category": "Quant Crash 2007"
+      },
+      {
+        "title": "Dark Pools",
+        "author": "Scott Patterson",
+        "category": "HFT"
+      },
+      {
+        "title": "Flash Boys",
+        "author": "Michael Lewis",
+        "category": "HFT"
+      }
+    ],
+    "ai_data_science": [
+      {
+        "title": "Hands-On Machine Learning",
+        "author": "Aur\u00e9lien G\u00e9ron",
+        "category": "ML Practical"
+      },
+      {
+        "title": "Deep Learning",
+        "author": "Ian Goodfellow",
+        "category": "Deep Learning"
+      },
+      {
+        "title": "Pattern Recognition and Machine Learning",
+        "author": "Christopher Bishop",
+        "category": "ML Theory"
+      },
+      {
+        "title": "Probabilistic Machine Learning",
+        "author": "Kevin Murphy",
+        "category": "ML Theory"
+      },
+      {
+        "title": "Reinforcement Learning: An Introduction",
+        "author": "Sutton & Barto",
+        "category": "RL"
+      }
+    ],
+    "portfolio_construction": [
+      {
+        "title": "The Little Book of Common Sense Investing",
+        "author": "John Bogle",
+        "category": "Indexing"
+      },
+      {
+        "title": "A Random Walk Down Wall Street",
+        "author": "Burton Malkiel",
+        "category": "Efficient Markets"
+      },
+      {
+        "title": "Asset Management",
+        "author": "Ang",
+        "category": "Factor Investing"
+      },
+      {
+        "title": "Portfolio Construction and Analytics",
+        "author": "Drobetz",
+        "category": "Portfolio"
+      },
+      {
+        "title": "Quantitative Equity Portfolio Management",
+        "author": "Qian, Hua, Sorensen",
+        "category": "Quant Portfolio"
+      }
+    ],
+    "advanced_phd": [
+      {
+        "title": "Asset Pricing",
+        "author": "John Cochrane",
+        "category": "Asset Pricing"
+      },
+      {
+        "title": "Investment Science",
+        "author": "David Luenberger",
+        "category": "Finance"
+      },
+      {
+        "title": "Financial Calculus",
+        "author": "Baxter & Rennie",
+        "category": "Derivatives Math"
+      },
+      {
+        "title": "Stochastic Calculus for Finance I",
+        "author": "Shreve",
+        "category": "Stochastic"
+      },
+      {
+        "title": "Stochastic Calculus for Finance II",
+        "author": "Shreve",
+        "category": "Stochastic"
+      }
+    ],
+    "elite_picks": [
+      {
+        "title": "Competition Demystified",
+        "author": "Bruce Greenwald",
+        "category": "Strategy"
+      },
+      {
+        "title": "Quality Investing",
+        "author": "Thornton",
+        "category": "Quality"
+      },
+      {
+        "title": "Financial Shenanigans",
+        "author": "Howard Schilit",
+        "category": "Fraud Detection"
+      },
+      {
+        "title": "The Outsiders",
+        "author": "William Thorndike",
+        "category": "CEO Capital Allocation"
+      },
+      {
+        "title": "Common Sense on Mutual Funds",
+        "author": "John Bogle",
+        "category": "Indexing"
+      },
+      {
+        "title": "The Psychology of Money",
+        "author": "Morgan Housel",
+        "category": "Behavioral Finance"
+      },
+      {
+        "title": "The Dhandho Investor",
+        "author": "Mohnish Pabrai",
+        "category": "Value"
+      },
+      {
+        "title": "The Warren Buffett Way",
+        "author": "Robert Hagstrom",
+        "category": "Buffett"
+      },
+      {
+        "title": "The Education of a Value Investor",
+        "author": "Guy Spier",
+        "category": "Value"
+      },
+      {
+        "title": "The Big Short",
+        "author": "Michael Lewis",
+        "category": "2008 Crisis"
+      },
+      {
+        "title": "Boomerang",
+        "author": "Michael Lewis",
+        "category": "European Debt Crisis"
+      },
+      {
+        "title": "The Undoing Project",
+        "author": "Michael Lewis",
+        "category": "Behavioral Finance"
+      },
+      {
+        "title": "Adaptive Markets",
+        "author": "Andrew Lo",
+        "category": "Market Theory"
+      },
+      {
+        "title": "The Little Book That Still Beats the Market",
+        "author": "Joel Greenblatt",
+        "category": "Magic Formula"
+      }
+    ]
+  }
+}

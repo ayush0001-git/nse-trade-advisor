@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>advisor — Trading AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{bg:{DEFAULT:'#0a0e17',card:'#131722',hover:'#1e222d'},accent:{green:'#22c55e',red:'#ef4444',yellow:'#eab308',blue:'#3b82f6',purple:'#a855f7'}}}}}</script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>body{font-family:'Inter',sans-serif}.mono{font-family:'JetBrains Mono',monospace}*{transition:background-color .15s, border-color .15s, color .15s}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#131722}::-webkit-scrollbar-thumb{background:#363a45;border-radius:3px}.pulse{animation:p 1.5s infinite}@keyframes p{0%,100%{opacity:1}50%{opacity:.4}}</style>
+</head>
+<body class="bg-bg text-slate-100 min-h-screen">
+
+<!-- NAV -->
+<nav class="bg-bg-card border-b border-slate-700 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 bg-gradient-to-br from-accent-green to-accent-blue rounded-lg flex items-center justify-center font-bold text-sm">A</div>
+            <span class="text-lg font-bold">advisor</span>
+            <span class="text-xs text-slate-500 mono">v3.0</span>
+        </div>
+        <div class="flex gap-1">
+            <button onclick="show('dashboard')" class="nav-btn px-3 py-1.5 rounded text-sm font-medium bg-accent-blue text-white">Dashboard</button>
+            <button onclick="show('analyze')" class="nav-btn px-3 py-1.5 rounded text-sm font-medium text-slate-400 hover:bg-bg-hover">Analyze</button>
+            <button onclick="show('discover')" class="nav-btn px-3 py-1.5 rounded text-sm font-medium text-slate-400 hover:bg-bg-hover">Discover</button>
+            <button onclick="show('pnl')" class="nav-btn px-3 py-1.5 rounded text-sm font-medium text-slate-400 hover:bg-bg-hover">P&L</button>
+            <button onclick="show('trades')" class="nav-btn px-3 py-1.5 rounded text-sm font-medium text-slate-400 hover:bg-bg-hover">Trades</button>
+            <button onclick="show('knowledge')" class="nav-btn px-3 py-1.5 rounded text-sm font-medium text-slate-400 hover:bg-bg-hover">Knowledge</button>
+        </div>
+        <div class="text-xs text-slate-500 mono" id="clock"></div>
+    </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 py-6">
+
+<!-- ========== DASHBOARD ========== -->
+<div id="dashboard" class="page">
+    <h1 class="text-2xl font-bold mb-4">Dashboard</h1>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" id="stats-grid"></div>
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold">Today's Scans</h2>
+        <button onclick="show('analyze')" class="px-3 py-1.5 bg-accent-blue rounded text-sm font-medium">+ Analyze Stock</button>
+    </div>
+    <div id="today-scans" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+</div>
+
+<!-- ========== ANALYZE ========== -->
+<div id="analyze" class="page hidden">
+    <h1 class="text-2xl font-bold mb-4">Analyze Any Stock</h1>
+    <div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-4">
+        <form id="analyze-form" class="flex gap-3">
+            <input type="text" id="analyze-symbol" placeholder="RELIANCE" required class="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded mono uppercase focus:outline-none focus:border-accent-blue">
+            <button type="submit" class="px-6 py-2 bg-accent-blue hover:bg-blue-600 rounded font-medium">Analyze</button>
+        </form>
+        <div class="flex gap-2 mt-3 flex-wrap" id="quick-picks"></div>
+    </div>
+    <div id="analyze-loading" class="hidden text-center py-8 text-accent-blue pulse text-lg">Analyzing...</div>
+    <div id="analyze-result"></div>
+</div>
+
+<!-- ========== DISCOVER ========== -->
+<div id="discover" class="page hidden">
+    <h1 class="text-2xl font-bold mb-4">Discover Stocks</h1>
+    <div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-4">
+        <div class="flex gap-3 flex-wrap">
+            <button onclick="discover('large')" class="px-4 py-2 bg-accent-blue rounded font-medium text-sm">💼 Large Cap</button>
+            <button onclick="discover('mid')" class="px-4 py-2 bg-slate-700 rounded font-medium text-sm">📊 Mid Cap</button>
+            <button onclick="discover('small')" class="px-4 py-2 bg-slate-700 rounded font-medium text-sm">🔥 Small Cap</button>
+            <button onclick="discover('micro')" class="px-4 py-2 bg-slate-700 rounded font-medium text-sm">⚡ Micro Cap</button>
+        </div>
+        <p class="text-xs text-slate-500 mt-2">Analyzes each stock across 6 layers and ranks by score. Takes ~1 min per stock.</p>
+    </div>
+    <div id="discover-loading" class="hidden text-center py-8 text-accent-blue pulse text-lg">Scanning stocks...</div>
+    <div id="discover-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+</div>
+
+<!-- ========== P&L ========== -->
+<div id="pnl" class="page hidden">
+    <h1 class="text-2xl font-bold mb-4">P&L Calculator</h1>
+    <div class="bg-bg-card rounded-xl border border-slate-700 p-5 max-w-md">
+        <form id="pnl-form" class="space-y-3">
+            <div><label class="text-xs text-slate-400 uppercase">Symbol</label><input type="text" name="symbol" placeholder="RELIANCE" required class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded mono uppercase"></div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="text-xs text-slate-400 uppercase">Quantity</label><input type="number" name="quantity" placeholder="50" min="1" required class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded mono"></div>
+                <div><label class="text-xs text-slate-400 uppercase">Buy Price ₹</label><input type="number" name="buy_price" placeholder="1300" min="0.01" step="0.01" required class="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded mono"></div>
+            </div>
+            <button type="submit" class="w-full py-2.5 bg-accent-blue hover:bg-blue-600 rounded font-medium">Calculate P&L</button>
+        </form>
+        <div id="pnl-result" class="hidden mt-4 pt-4 border-t border-slate-700"></div>
+    </div>
+</div>
+
+<!-- ========== TRADES ========== -->
+<div id="trades" class="page hidden">
+    <h1 class="text-2xl font-bold mb-4">Trade Journal</h1>
+    <div id="trades-list" class="bg-bg-card rounded-xl border border-slate-700 overflow-hidden"></div>
+</div>
+
+<!-- ========== KNOWLEDGE ========== -->
+<div id="knowledge" class="page hidden">
+    <h1 class="text-2xl font-bold mb-4">Knowledge Base</h1>
+    <div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-4">
+        <form id="knowledge-form" class="flex gap-3">
+            <input type="text" id="knowledge-query" placeholder="Search: momentum, risk, options, candlestick..." class="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded focus:outline-none focus:border-accent-blue">
+            <button type="submit" class="px-6 py-2 bg-accent-purple rounded font-medium">Search</button>
+        </form>
+    </div>
+    <div id="knowledge-results" class="space-y-2"></div>
+</div>
+
+</main>
+
+<footer class="border-t border-slate-700 mt-12 py-4 text-center text-xs text-slate-600">advisor v3.0 — advisory only, never places orders. Not investment advice.</footer>
+
+<script>
+// ===== Clock =====
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false})},1000);
+
+// ===== Navigation =====
+function show(page) {
+    document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
+    document.getElementById(page).classList.remove('hidden');
+    document.querySelectorAll('.nav-btn').forEach(b=>{
+        b.classList.remove('bg-accent-blue','text-white');
+        b.classList.add('text-slate-400');
+    });
+    event.target.classList.add('bg-accent-blue','text-white');
+    event.target.classList.remove('text-slate-400');
+    if(page==='dashboard') loadDashboard();
+    if(page==='trades') loadTrades();
+}
+
+// ===== Stats =====
+async function loadStats() {
+    const res = await fetch('/api/stats');
+    const s = await res.json();
+    document.getElementById('stats-grid').innerHTML = `
+        <div class="bg-bg-card rounded-xl p-4 border border-slate-700"><div class="text-xs text-slate-400 uppercase">Stocks</div><div class="text-2xl font-bold">${s.total_stocks}</div></div>
+        <div class="bg-bg-card rounded-xl p-4 border border-slate-700"><div class="text-xs text-slate-400 uppercase">Knowledge Rules</div><div class="text-2xl font-bold">${s.knowledge_rules}</div></div>
+        <div class="bg-bg-card rounded-xl p-4 border border-slate-700"><div class="text-xs text-slate-400 uppercase">Large / Mid / Small</div><div class="text-2xl font-bold">${s.large_cap}/${s.mid_cap}/${s.small_cap}</div></div>
+        <div class="bg-bg-card rounded-xl p-4 border border-slate-700"><div class="text-xs text-slate-400 uppercase">Sectors</div><div class="text-2xl font-bold">${s.sectors}</div></div>
+    `;
+}
+
+// ===== Dashboard =====
+async function loadDashboard() {
+    await loadStats();
+    const res = await fetch('/api/today');
+    const data = await res.json();
+    const grid = document.getElementById('today-scans');
+    if (!data.scans || data.scans.length === 0) {
+        grid.innerHTML = '<div class="bg-bg-card rounded-xl p-6 border border-slate-700 text-center text-slate-400">No scans yet. Go to <b>Analyze</b> to scan a stock.</div>';
+        return;
+    }
+    grid.innerHTML = data.scans.map(s => {
+        const color = s.score>=80?'green':s.score>=70?'yellow':s.score>=60?'orange-400':'red';
+        return `<div class="bg-bg-card rounded-xl p-4 border border-slate-700 border-l-4 border-l-accent-${color}">
+            <div class="flex justify-between mb-2"><span class="font-bold">${s.symbol.replace('.NS','')}</span><span class="text-xl font-bold mono text-accent-${color}">${s.score}</span></div>
+            <div class="text-xs text-slate-400 mb-2">${s.verdict} ${s.direction}</div>
+            ${s.entry?`<div class="text-xs mono">Entry ₹${s.entry} | Stop ₹${s.stop} | Target ₹${s.target}</div>`:''}
+        </div>`;
+    }).join('');
+}
+
+// ===== Analyze =====
+const QUICK = ['RELIANCE','TCS','HDFCBANK','INFY','SBIN','ITC','ZOMATO','PAYTM'];
+document.getElementById('quick-picks').innerHTML = QUICK.map(s=>`<button onclick="analyzeStock('${s}')" class="px-2 py-1 bg-slate-800 rounded text-xs mono hover:bg-slate-700">${s}</button>`).join('');
+
+document.getElementById('analyze-form').addEventListener('submit',e=>{e.preventDefault();analyzeStock(document.getElementById('analyze-symbol').value)});
+
+async function analyzeStock(symbol) {
+    document.getElementById('analyze-symbol').value = symbol;
+    const loading = document.getElementById('analyze-loading');
+    const result = document.getElementById('analyze-result');
+    loading.classList.remove('hidden');
+    result.innerHTML = '';
+    try {
+        const res = await fetch(`/api/analyze/${symbol}`);
+        const d = await res.json();
+        loading.classList.add('hidden');
+        if (d.error) { result.innerHTML = `<div class="bg-accent-red/20 border border-accent-red text-accent-red rounded-xl p-4">${d.error}</div>`; return; }
+        const color = d.score>=80?'green':d.score>=70?'yellow':d.score>=60?'orange-400':'red';
+        const scores = d.scores;
+        const ind = d.indicators;
+        result.innerHTML = `
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-6 mb-4 border-l-4 border-l-accent-${color}">
+            <div class="flex justify-between items-start mb-4">
+                <div><div class="text-2xl font-bold">${d.symbol.replace('.NS','')}</div>
+                <div class="text-sm text-slate-400">${d.sector} | ${d.cap_type} | ₹${d.current_price}</div></div>
+                <div class="text-right"><div class="text-5xl font-bold mono text-accent-${color}">${d.score}</div><div class="text-xs text-slate-500">/100</div></div>
+            </div>
+            <div class="text-lg font-bold mb-3 text-accent-${color}">${d.rating} — ${d.direction}</div>
+
+            <!-- SIMPLE ACTION PLAN -->
+            <div class="bg-slate-800/60 rounded-lg p-4 mb-4">
+                <div class="text-sm font-semibold mb-2">📋 What to do:</div>
+                <div class="text-sm text-slate-200">${d.action_plan}</div>
+            </div>
+
+            <!-- IF YOU BUY: profit/loss in simple terms -->
+            ${d.score >= 60 ? `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div class="bg-slate-800/50 rounded-lg p-3 text-center">
+                    <div class="text-xs text-slate-400 uppercase mb-1">If you buy</div>
+                    <div class="text-sm mono">${d.pnl_summary.if_you_buy}</div>
+                </div>
+                <div class="bg-accent-green/10 rounded-lg p-3 text-center">
+                    <div class="text-xs text-accent-green uppercase mb-1">If target hits ✅</div>
+                    <div class="text-sm mono text-accent-green">${d.pnl_summary.if_target_hits}</div>
+                </div>
+                <div class="bg-accent-red/10 rounded-lg p-3 text-center">
+                    <div class="text-xs text-accent-red uppercase mb-1">If stop hits ❌</div>
+                    <div class="text-sm mono text-accent-red">${d.pnl_summary.if_stop_hits}</div>
+                </div>
+            </div>
+            <div class="text-center text-sm text-slate-400 mb-4">${d.pnl_summary.risk_reward_ratio}</div>
+            ` : ''}
+
+            <!-- SCORE BREAKDOWN -->
+            <div class="grid grid-cols-6 gap-2 mb-4">
+                ${[['Tech',scores.technical,30,'blue'],['News',scores.news,20,'green'],['Sent',scores.sentiment,15,'purple'],['Inst',scores.institutional,15,'yellow'],['Opt',scores.options,10,'cyan'],['Fund',scores.fundamentals,10,'pink']].map(([l,v,m,c])=>`
+                <div class="text-center"><div class="text-xs text-slate-500">${l}</div><div class="text-lg font-bold mono">${v}<span class="text-xs text-slate-600">/${m}</span></div><div class="h-1 bg-slate-700 rounded mt-1"><div class="h-full bg-accent-${c} rounded" style="width:${v/m*100}%"></div></div></div>`).join('')}
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-bg-card rounded-xl border border-slate-700 p-4">
+                <h3 class="font-bold text-accent-green mb-2">✅ Reasons to Buy</h3>
+                ${d.reasons.map(r=>`<div class="text-sm mb-1">${r}</div>`).join('') || '<div class="text-sm text-slate-500">None</div>'}
+            </div>
+            <div class="bg-bg-card rounded-xl border border-slate-700 p-4">
+                <h3 class="font-bold text-accent-red mb-2">⚠️ Risks</h3>
+                ${d.risks.map(r=>`<div class="text-sm mb-1">${r}</div>`).join('') || '<div class="text-sm text-slate-500">None</div>'}
+            </div>
+        </div>
+
+        <!-- CHART PATTERNS -->
+        ${d.patterns ? `
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-4">
+            <h3 class="font-bold text-lg mb-3">📊 Chart Patterns Detected</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <div class="text-sm font-bold text-accent-green mb-2">🟢 Bullish (${d.patterns.bullish.length})</div>
+                    ${d.patterns.bullish.length > 0 ? d.patterns.bullish.map(p => `<div class="bg-accent-green/10 rounded p-2 mb-1"><div class="flex justify-between"><span class="font-bold text-sm">${p.pattern}</span><span class="text-xs mono text-accent-green">${p.strength}/10</span></div><div class="text-xs text-slate-400">${p.desc}</div></div>`).join('') : '<div class="text-sm text-slate-500">None</div>'}
+                </div>
+                <div>
+                    <div class="text-sm font-bold text-accent-red mb-2">🔴 Bearish (${d.patterns.bearish.length})</div>
+                    ${d.patterns.bearish.length > 0 ? d.patterns.bearish.map(p => `<div class="bg-accent-red/10 rounded p-2 mb-1"><div class="flex justify-between"><span class="font-bold text-sm">${p.pattern}</span><span class="text-xs mono text-accent-red">${p.strength}/10</span></div><div class="text-xs text-slate-400">${p.desc}</div></div>`).join('') : '<div class="text-sm text-slate-500">None</div>'}
+                </div>
+            </div>
+        </div>` : ''}
+
+        <!-- HISTORICAL STATS -->
+        ${d.historical_stats && d.historical_stats.total > 0 ? `
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-5 mb-4">
+            <h3 class="font-bold text-lg mb-3">📈 Historical Pattern Performance</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div class="bg-slate-800/50 rounded p-2 text-center"><div class="text-xs text-slate-400">Past Patterns</div><div class="text-xl font-bold mono">${d.historical_stats.total}</div></div>
+                <div class="bg-slate-800/50 rounded p-2 text-center"><div class="text-xs text-slate-400">Win Rate</div><div class="text-xl font-bold mono ${d.historical_stats.win_rate>=60?'text-accent-green':d.historical_stats.win_rate>=50?'text-accent-yellow':'text-accent-red'}">${d.historical_stats.win_rate}%</div></div>
+                <div class="bg-slate-800/50 rounded p-2 text-center"><div class="text-xs text-slate-400">Avg 5d Return</div><div class="text-xl font-bold mono ${d.historical_stats.avg_5d_return>=0?'text-accent-green':'text-accent-red'}">${d.historical_stats.avg_5d_return>0?'+':''}${d.historical_stats.avg_5d_return}%</div></div>
+                <div class="bg-slate-800/50 rounded p-2 text-center"><div class="text-xs text-slate-400">Avg 20d Return</div><div class="text-xl font-bold mono ${d.historical_stats.avg_20d_return>=0?'text-accent-green':'text-accent-red'}">${d.historical_stats.avg_20d_return>0?'+':''}${d.historical_stats.avg_20d_return}%</div></div>
+            </div>
+            ${d.historical_stats.examples ? d.historical_stats.examples.map(h=>`<div class="text-xs mono ${h.win?'text-accent-green':'text-accent-red'} flex justify-between py-1 border-b border-slate-700/30"><span>${h.date} ${h.type}</span><span>5d: ${h.fwd_5d>0?'+':''}${h.fwd_5d}% | 20d: ${h.fwd_20d>0?'+':''}${h.fwd_20d}%</span></div>`).join('') : ''}
+            ${d.historical_stats.win_rate>=60?'<div class="text-sm text-accent-green mt-2">✅ High historical win rate — good odds.</div>':''}
+            ${d.historical_stats.win_rate<50&&d.historical_stats.total>5?'<div class="text-sm text-accent-red mt-2">⚠️ Low historical win rate — patterns tend to fail here.</div>':''}
+        </div>` : ''}
+
+        <div class="bg-bg-card rounded-xl border border-slate-700 p-4 mb-4">
+            <h3 class="font-bold mb-2">📊 Indicators</h3>
+            <div class="grid grid-cols-4 gap-3 text-sm">
+                <div>RSI: <b class="mono">${ind.rsi}</b></div><div>MACD: <b class="mono">${ind.macd_hist}</b></div>
+                <div>ATR: <b class="mono">${ind.atr}</b></div><div>Vol: <b class="mono">${ind.volume_ratio}x</b></div>
+                <div>SMA20: <b class="mono">${ind.sma_20}</b></div><div>SMA50: <b class="mono">${ind.sma_50||'—'}</b></div>
+                <div>52w High: <b class="mono">${ind.high_52w}</b></div><div>52w Low: <b class="mono">${ind.low_52w}</b></div>
+                <div>5d Return: <b class="mono ${ind.return_5d>=0?'text-accent-green':'text-accent-red'}">${ind.return_5d>0?'+':''}${ind.return_5d}%</b></div>
+                <div>20d Return: <b class="mono ${ind.return_20d>=0?'text-accent-green':'text-accent-red'}">${ind.return_20d>0?'+':''}${ind.return_20d}%</b></div>
+                <div>P/E: <b class="mono">${ind.pe_ratio||'—'}</b></div><div>ROE: <b class="mono">${ind.roe?ind.roe+'%':'—'}</b></div>
+            </div>
+        </div>
+        <button onclick="logTrade(${JSON.stringify(d).replace(/"/g,'&quot;')})" class="px-4 py-2 bg-accent-blue rounded font-medium text-sm">📝 Log This Trade</button>
+        `;
+    } catch(e) { loading.classList.add('hidden'); result.innerHTML = `<div class="bg-accent-red/20 border border-accent-red text-accent-red rounded-xl p-4">Error: ${e.message}</div>`; }
+}
+
+// ===== Log trade =====
+async function logTrade(d) {
+    const res = await fetch('/api/trades/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        symbol:d.symbol,direction:d.scores.technical>15?'long':'neutral',entry:d.plan.entry,stop:d.plan.stop,
+        target:d.plan.target,quantity:d.plan.quantity,score:d.score,rating:d.rating
+    })});
+    const r = await res.json();
+    alert(`Trade #${r.id} logged!`);
+}
+
+// ===== Discover =====
+async function discover(cap) {
+    document.querySelectorAll('#discover button').forEach((b,i)=>{b.className=i===({'large':0,'mid':1,'small':2,'micro':3}[cap])?'px-4 py-2 bg-accent-blue rounded font-medium text-sm':'px-4 py-2 bg-slate-700 rounded font-medium text-sm'});
+    const loading = document.getElementById('discover-loading');
+    const results = document.getElementById('discover-results');
+    loading.classList.remove('hidden'); results.innerHTML='';
+    const res = await fetch(`/api/stocks/${cap}`);
+    const data = await res.json();
+    for(let i=0;i<Math.min(data.stocks.length,6);i++) {
+        const sym = data.stocks[i];
+        try {
+            const r = await fetch(`/api/analyze/${sym}`);
+            const d = await r.json();
+            if(d.error) continue;
+            const color = d.score>=80?'green':d.score>=70?'yellow':d.score>=60?'orange-400':'red';
+            results.innerHTML += `<div class="bg-bg-card rounded-xl p-4 border border-slate-700 border-l-4 border-l-accent-${color} cursor-pointer" onclick="show('analyze');analyzeStock('${sym.replace('.NS','')}')">
+                <div class="flex justify-between mb-1"><span class="font-bold">${d.symbol.replace('.NS','')}</span><span class="text-2xl font-bold mono text-accent-${color}">${d.score}</span></div>
+                <div class="text-xs text-slate-400">${d.rating} | ${d.sector}</div>
+                <div class="text-xs mono mt-1">₹${d.current_price} | RSI ${d.indicators.rsi}</div>
+            </div>`;
+        } catch(e){}
+    }
+    loading.classList.add('hidden');
+}
+
+// ===== P&L =====
+document.getElementById('pnl-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const f = e.target;
+    const res = await fetch('/api/pnl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:f.symbol.value,quantity:+f.quantity.value,buy_price:+f.buy_price.value})});
+    const d = await res.json();
+    const el = document.getElementById('pnl-result');
+    if(d.error){el.innerHTML=`<div class="text-accent-red">${d.error}</div>`;el.classList.remove('hidden');return;}
+    const c = d.pnl>=0?'green':'red';
+    el.innerHTML=`
+        <div class="grid grid-cols-2 gap-2 mb-2"><div><div class="text-xs text-slate-400">Current</div><div class="text-lg font-bold mono">₹${d.current_price}</div></div><div><div class="text-xs text-slate-400">Invested</div><div class="text-lg font-bold mono">₹${d.invested.toLocaleString('en-IN')}</div></div></div>
+        <div class="bg-slate-800/50 rounded-lg p-3 mt-2"><div class="text-xs text-slate-400">P&L</div><div class="text-3xl font-bold mono text-accent-${c}">${d.pnl>=0?'+':''}₹${d.pnl.toLocaleString('en-IN')} (${d.pnl_pct>=0?'+':''}${d.pnl_pct}%)</div></div>`;
+    el.classList.remove('hidden');
+});
+
+// ===== Trades =====
+async function loadTrades() {
+    const res = await fetch('/api/trades');
+    const data = await res.json();
+    const el = document.getElementById('trades-list');
+    if(!data.trades||data.trades.length===0){el.innerHTML='<div class="p-6 text-center text-slate-400">No trades logged yet. Analyze a stock and click "Log This Trade".</div>';return;}
+    el.innerHTML = '<table class="w-full text-sm"><thead class="text-xs text-slate-400 uppercase bg-slate-800/50"><tr><th class="text-left p-2">#</th><th class="text-left p-2">Symbol</th><th class="text-right p-2">Entry</th><th class="text-right p-2">Exit</th><th class="text-right p-2">Score</th><th class="text-center p-2">Status</th></tr></thead><tbody>'+data.trades.map(t=>`<tr class="border-t border-slate-700"><td class="p-2 mono text-slate-500">${t.id}</td><td class="p-2 font-semibold">${t.symbol.replace('.NS','')}</td><td class="p-2 text-right mono">₹${t.entry||'—'}</td><td class="p-2 text-right mono">${t.exit_price?'₹'+t.exit_price:'—'}</td><td class="p-2 text-right mono">${t.score||'—'}</td><td class="p-2 text-center"><span class="px-2 py-0.5 rounded text-xs mono ${t.status==='open'?'bg-accent-blue/20 text-accent-blue':'bg-slate-700 text-slate-400'}">${t.status.toUpperCase()}</span></td></tr>`).join('')+'</tbody></table>';
+}
+
+// ===== Knowledge =====
+document.getElementById('knowledge-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const q = document.getElementById('knowledge-query').value;
+    const res = await fetch(`/api/knowledge?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    const el = document.getElementById('knowledge-results');
+    el.innerHTML = data.results.map(r=>`<div class="bg-bg-card rounded-lg border border-slate-700 p-3 border-l-2 border-accent-purple"><div class="text-xs text-slate-500 mb-1">Relevance: ${r.relevance}</div><div class="text-sm">${r.rule}</div></div>`).join('')||'<div class="text-slate-500">No results</div>';
+});
+
+// ===== Init =====
+loadStats();
+loadDashboard();
+</script>
+</body>
+</html>

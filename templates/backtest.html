@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% block title %}Backtest · {{ symbol }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+        <a href="/stock/{{ symbol }}" class="text-sm text-ink-muted hover:text-ink">← Back to {{ symbol }}</a>
+        <a href="/backtest/optimize/{{ symbol }}" class="text-sm mono px-3 py-1 border border-border rounded hover:border-accent-green hover:text-accent-green">🔬 Find best params</a>
+    </div>
+    <h1 class="text-3xl font-bold headline tracking-tight mt-2">Backtest · {{ symbol }}</h1>
+    <p class="text-ink-muted text-sm">
+        Simulates the same SMA/RSI/ADX long-swing strategy the advisor uses, on the last 5 years of daily bars.
+        Costs are set to 0.1% per trade (broker + STT + slippage combined).
+    </p>
+</div>
+
+<div id="bt-loading" class="surface p-8 text-center">
+    <div class="text-lg text-ink-muted">
+        <span class="inline-block animate-pulse">↻</span> Running backtest on {{ symbol }}...
+    </div>
+    <div class="text-xs text-ink-dim mt-2 mono">This takes ~10–20 s the first time (yfinance download + simulation).</div>
+</div>
+
+<div id="bt-error" class="hidden surface p-6 border border-accent-red/40">
+    <h2 class="text-lg font-bold text-accent-red mb-2">Backtest failed</h2>
+    <pre id="bt-error-body" class="text-xs mono text-accent-red whitespace-pre-wrap"></pre>
+</div>
+
+<div id="bt-result" class="hidden space-y-6">
+
+    <!-- Verdict headline -->
+    <div id="bt-verdict" class="surface p-6"></div>
+
+    <!-- Money view: what the simulation means in rupees -->
+    <div class="surface p-6" id="money-view">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+                <h2 class="text-lg font-bold">What this means in money</h2>
+                <p class="text-xs text-ink-dim mono">Scaled from the 5-year simulation. History, not a promise.</p>
+            </div>
+            <label class="flex items-center gap-2 text-sm text-ink-muted">
+                On capital of
+                <span class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-dim mono text-xs">₹</span>
+                    <input type="number" id="money-capital" value="100000" min="1000" step="10000"
+                           class="w-36 pl-7 pr-3 py-1.5 bg-bg-sub border border-border rounded-lg mono font-bold text-sm">
+                </span>
+            </label>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="bg-accent-red/10 rounded-lg p-4 border border-accent-red/30">
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Worst single trade</div>
+                <div class="text-2xl font-bold mono text-accent-red" id="m-worst">—</div>
+                <div class="text-xs text-ink-dim mt-1">biggest one-trade loss seen</div>
+            </div>
+            <div class="bg-accent-green/10 rounded-lg p-4 border border-accent-green/30">
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Best single trade</div>
+                <div class="text-2xl font-bold mono text-accent-green" id="m-best">—</div>
+                <div class="text-xs text-ink-dim mt-1">biggest one-trade gain seen</div>
+            </div>
+            <div class="bg-bg-sub rounded-lg p-4 border border-border">
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Average per trade</div>
+                <div class="text-2xl font-bold mono" id="m-avg">—</div>
+                <div class="text-xs text-ink-dim mt-1" id="m-avg-note">across all simulated trades</div>
+            </div>
+            <div class="bg-bg-sub rounded-lg p-4 border border-border">
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Worst stretch (drawdown)</div>
+                <div class="text-2xl font-bold mono text-accent-red" id="m-dd">—</div>
+                <div class="text-xs text-ink-dim mt-1">deepest peak-to-trough dip</div>
+            </div>
+            <div class="bg-bg-sub rounded-lg p-4 border border-border">
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">5-year total</div>
+                <div class="text-2xl font-bold mono" id="m-total">—</div>
+                <div class="text-xs text-ink-dim mt-1" id="m-total-note">net of 0.1%/trade costs</div>
+            </div>
+            <div class="bg-bg-sub rounded-lg p-4 border border-border">
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono mb-1">Chance a trade wins</div>
+                <div class="text-2xl font-bold mono" id="m-winp">—</div>
+                <div class="text-xs text-ink-dim mt-1" id="m-winp-note">from the simulated trades</div>
+            </div>
+        </div>
+        <p class="text-xs text-ink-dim mt-4">
+            ⚠ These numbers come from replaying the strategy on the last 5 years of this one stock.
+            The future can be worse than the worst shown here. Never risk money you can't afford to lose.
+        </p>
+    </div>
+
+    <!-- Key stats grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Return</div><div class="text-2xl font-bold mono mt-1" id="s-return">—</div><div class="text-xs text-ink-dim mono" id="s-return-vs-bh">vs buy&amp;hold</div></div>
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">CAGR</div><div class="text-2xl font-bold mono mt-1" id="s-cagr">—</div><div class="text-xs text-ink-dim mono">per year</div></div>
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Sharpe</div><div class="text-2xl font-bold mono mt-1" id="s-sharpe">—</div><div class="text-xs text-ink-dim mono">risk-adjusted</div></div>
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Max drawdown</div><div class="text-2xl font-bold mono mt-1 text-accent-red" id="s-dd">—</div><div class="text-xs text-ink-dim mono">worst peak-to-trough</div></div>
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Trades</div><div class="text-2xl font-bold mono mt-1" id="s-trades">—</div><div class="text-xs text-ink-dim mono" id="s-exp">exposure —</div></div>
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Win rate</div><div class="text-2xl font-bold mono mt-1" id="s-win">—</div><div class="text-xs text-ink-dim mono" id="s-avg">avg trade —</div></div>
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Kelly criterion</div><div class="text-2xl font-bold mono mt-1" id="s-kelly">—</div><div class="text-xs text-ink-dim mono">optimal risk fraction</div></div>
+        <div class="surface p-5"><div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Best / worst</div><div class="text-2xl font-bold mono mt-1" id="s-bw">—</div><div class="text-xs text-ink-dim mono">single-trade extremes</div></div>
+    </div>
+
+    <!-- Equity curve -->
+    <div class="surface p-6">
+        <h2 class="text-lg font-bold mb-1">Equity curve</h2>
+        <p class="text-xs text-ink-dim mb-4 mono" id="s-range">—</p>
+        <canvas id="equity-chart" height="220"></canvas>
+    </div>
+
+    <!-- Trades table -->
+    <div class="surface p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h2 class="text-lg font-bold">Trades (first 50)</h2>
+                <p class="text-xs text-ink-dim mono">Full trade log from the simulation.</p>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-[10px] uppercase tracking-widest text-ink-dim mono">
+                    <tr class="border-b border-border">
+                        <th class="text-left py-2 px-2">#</th>
+                        <th class="text-left py-2 px-2">Entry</th>
+                        <th class="text-right py-2 px-2">Entry ₹</th>
+                        <th class="text-left py-2 px-2">Exit</th>
+                        <th class="text-right py-2 px-2">Exit ₹</th>
+                        <th class="text-right py-2 px-2">Size</th>
+                        <th class="text-right py-2 px-2">P&amp;L ₹</th>
+                        <th class="text-right py-2 px-2">Return</th>
+                    </tr>
+                </thead>
+                <tbody id="trades-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(async () => {
+    const err = document.getElementById('bt-error');
+    const loading = document.getElementById('bt-loading');
+    const result = document.getElementById('bt-result');
+    try {
+        const res = await fetch('/api/backtest/{{ symbol }}');
+        const data = await res.json();
+        loading.classList.add('hidden');
+        if (!res.ok) {
+            document.getElementById('bt-error-body').textContent = data.error + '\n\n' + (data.traceback || '');
+            err.classList.remove('hidden');
+            return;
+        }
+        renderResult(data);
+        window.__btData = data;
+        renderMoney(data);
+        document.getElementById('money-capital').addEventListener('input', () => renderMoney(window.__btData));
+        result.classList.remove('hidden');
+    } catch (e) {
+        loading.classList.add('hidden');
+        document.getElementById('bt-error-body').textContent = 'Network error: ' + e.message;
+        err.classList.remove('hidden');
+    }
+})();
+
+function fmt(v, decimals = 2, suffix = '') {
+    if (v === null || v === undefined || Number.isNaN(v)) return '—';
+    return v.toFixed(decimals) + suffix;
+}
+function fmtInt(v) { return v === null || v === undefined ? '—' : Math.round(v).toLocaleString('en-IN'); }
+function fmtRs(v) { return v === null || v === undefined ? '—' : '₹' + Math.round(v).toLocaleString('en-IN'); }
+function fmtPct(v) { if (v === null || v === undefined) return '—'; const s = v >= 0 ? '+' : ''; return s + v.toFixed(2) + '%'; }
+function colorFor(v, invert = false) {
+    if (v === null || v === undefined) return 'text-ink-dim';
+    const good = invert ? v < 0 : v > 0;
+    return good ? 'text-accent-green' : 'text-accent-red';
+}
+
+function renderMoney(d) {
+    if (!d) return;
+    const cap = parseFloat(document.getElementById('money-capital').value) || 100000;
+    const scale = cap / (d.starting_cash || 100000);
+    const pnls = (d.trades_table || []).map(t => t.pnl);
+
+    const setRs = (id, v, signColor) => {
+        const el = document.getElementById(id);
+        if (v === null || v === undefined || Number.isNaN(v)) { el.textContent = '—'; return; }
+        el.textContent = (v >= 0 ? '+' : '−') + '₹' + Math.round(Math.abs(v)).toLocaleString('en-IN');
+        if (signColor) el.className = 'text-2xl font-bold mono ' + (v >= 0 ? 'text-accent-green' : 'text-accent-red');
+    };
+
+    if (pnls.length) {
+        setRs('m-worst', Math.min(...pnls) * scale);
+        setRs('m-best', Math.max(...pnls) * scale);
+        setRs('m-avg', pnls.reduce((a, b) => a + b, 0) / pnls.length * scale, true);
+        document.getElementById('m-avg-note').textContent = `across ${d.trades} simulated trades`;
+    } else {
+        ['m-worst', 'm-best', 'm-avg'].forEach(id => document.getElementById(id).textContent = '—');
+        document.getElementById('m-avg-note').textContent = 'no trades triggered in 5 years';
+    }
+
+    // Drawdown & total scale off the chosen capital directly (percentages of equity)
+    const dd = d.max_drawdown_pct !== null ? d.max_drawdown_pct / 100 * cap : null;
+    document.getElementById('m-dd').textContent = dd !== null ? '−₹' + Math.round(Math.abs(dd)).toLocaleString('en-IN') : '—';
+
+    const total = d.return_pct !== null ? d.return_pct / 100 * cap : null;
+    setRs('m-total', total, true);
+
+    const winp = document.getElementById('m-winp');
+    if (d.win_rate_pct !== null && d.trades > 0) {
+        winp.textContent = d.win_rate_pct.toFixed(0) + '%';
+        winp.className = 'text-2xl font-bold mono ' + (d.win_rate_pct >= 50 ? 'text-accent-green' : 'text-accent-yellow');
+        document.getElementById('m-winp-note').textContent = `so ~${(100 - d.win_rate_pct).toFixed(0)}% of trades lose — that's normal`;
+    } else {
+        winp.textContent = '—';
+    }
+}
+
+function renderResult(d) {
+    // Verdict headline
+    const verdictBox = document.getElementById('bt-verdict');
+    const beatBH = d.return_pct !== null && d.buy_hold_pct !== null && d.return_pct > d.buy_hold_pct;
+    const profitable = d.return_pct !== null && d.return_pct > 0;
+    let verdict, color, hint;
+    if (!d.trades) {
+        verdict = 'No trades triggered'; color = 'text-ink-dim';
+        hint = 'The strategy did not find any TAKE conditions on this stock in 5 years. It is filtering hard — that is by design.';
+    } else if (profitable && beatBH) {
+        verdict = 'Beat buy-and-hold'; color = 'text-accent-green';
+        hint = 'Historically, the strategy would have made money AND outperformed just holding the stock. Doesn\'t guarantee the future.';
+    } else if (profitable) {
+        verdict = 'Profitable but underperformed'; color = 'text-accent-yellow';
+        hint = 'The strategy made money but less than passively holding. Timing added cost, not alpha.';
+    } else {
+        verdict = 'Would have lost money'; color = 'text-accent-red';
+        hint = 'Historically, this strategy would have lost money on this stock. Do NOT trade it live before understanding why.';
+    }
+    verdictBox.innerHTML = `
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+                <div class="text-[10px] uppercase tracking-widest text-ink-dim mono">Verdict · 5-year simulation</div>
+                <h2 class="text-2xl font-bold ${color} mt-1">${verdict}</h2>
+            </div>
+            <div class="text-right text-sm text-ink-muted">
+                <div>Starting cash: <span class="mono font-bold text-ink">${fmtRs(d.starting_cash)}</span></div>
+                <div>Final equity: <span class="mono font-bold ${colorFor(d.return_pct)}">${fmtRs(d.final_equity)}</span></div>
+            </div>
+        </div>
+        <p class="text-sm text-ink-muted mt-3">${hint}</p>`;
+
+    // Stat tiles
+    document.getElementById('s-return').textContent = fmtPct(d.return_pct);
+    document.getElementById('s-return').className = 'text-2xl font-bold mono mt-1 ' + colorFor(d.return_pct);
+    document.getElementById('s-return-vs-bh').textContent = 'buy&hold: ' + fmtPct(d.buy_hold_pct);
+
+    document.getElementById('s-cagr').textContent = fmtPct(d.cagr_pct);
+    document.getElementById('s-cagr').className = 'text-2xl font-bold mono mt-1 ' + colorFor(d.cagr_pct);
+
+    document.getElementById('s-sharpe').textContent = fmt(d.sharpe);
+    document.getElementById('s-sharpe').className = 'text-2xl font-bold mono mt-1 ' + colorFor(d.sharpe);
+
+    document.getElementById('s-dd').textContent = fmtPct(d.max_drawdown_pct);
+
+    document.getElementById('s-trades').textContent = fmtInt(d.trades);
+    document.getElementById('s-exp').textContent = 'exposure ' + fmtPct(d.exposure_time_pct);
+
+    document.getElementById('s-win').textContent = d.win_rate_pct !== null ? d.win_rate_pct.toFixed(1) + '%' : '—';
+    document.getElementById('s-win').className = 'text-2xl font-bold mono mt-1 ' + (d.win_rate_pct >= 50 ? 'text-accent-green' : 'text-accent-yellow');
+    document.getElementById('s-avg').textContent = 'avg trade ' + fmtPct(d.avg_trade_pct);
+
+    document.getElementById('s-kelly').textContent = d.kelly !== null ? (d.kelly * 100).toFixed(1) + '%' : '—';
+    document.getElementById('s-kelly').className = 'text-2xl font-bold mono mt-1 ' + colorFor(d.kelly);
+
+    document.getElementById('s-bw').textContent = fmtPct(d.best_trade_pct) + ' / ' + fmtPct(d.worst_trade_pct);
+
+    document.getElementById('s-range').textContent = `${d.start} → ${d.end} · ${d.bars} bars`;
+
+    // Equity curve on canvas (no external lib)
+    drawEquityCurve(d.equity_series, d.starting_cash);
+
+    // Trades table
+    const tbody = document.getElementById('trades-body');
+    tbody.innerHTML = d.trades_table.map((t, i) => `
+        <tr class="border-t border-border">
+            <td class="py-2 px-2 mono text-ink-dim">${i + 1}</td>
+            <td class="py-2 px-2 mono text-xs">${t.entry_time}</td>
+            <td class="py-2 px-2 text-right mono">${fmtRs(t.entry_price)}</td>
+            <td class="py-2 px-2 mono text-xs">${t.exit_time}</td>
+            <td class="py-2 px-2 text-right mono">${fmtRs(t.exit_price)}</td>
+            <td class="py-2 px-2 text-right mono">${t.size.toFixed(2)}</td>
+            <td class="py-2 px-2 text-right mono ${colorFor(t.pnl)}">${fmtRs(t.pnl)}</td>
+            <td class="py-2 px-2 text-right mono ${colorFor(t.return_pct)}">${fmtPct(t.return_pct)}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="8" class="py-6 text-center text-ink-dim">No trades</td></tr>';
+}
+
+function drawEquityCurve(series, cash) {
+    const canvas = document.getElementById('equity-chart');
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * (window.devicePixelRatio || 1);
+    canvas.height = 220 * (window.devicePixelRatio || 1);
+    ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    const w = rect.width, h = 220;
+    ctx.clearRect(0, 0, w, h);
+    if (!series || series.length === 0) return;
+
+    const vals = series.map(p => p.v);
+    const min = Math.min(...vals, cash), max = Math.max(...vals, cash);
+    const padY = 20, padX = 40;
+    const sx = (i) => padX + i * (w - padX * 2) / (series.length - 1);
+    const sy = (v) => h - padY - (v - min) / (max - min) * (h - padY * 2);
+
+    // baseline
+    ctx.strokeStyle = '#2b3860'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(padX, sy(cash)); ctx.lineTo(w - padX, sy(cash)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // equity line
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(34,211,138,.4)'); grad.addColorStop(1, 'rgba(34,211,138,0)');
+    ctx.beginPath();
+    series.forEach((p, i) => i === 0 ? ctx.moveTo(sx(i), sy(p.v)) : ctx.lineTo(sx(i), sy(p.v)));
+    ctx.lineTo(sx(series.length - 1), h - padY); ctx.lineTo(sx(0), h - padY);
+    ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+    ctx.beginPath();
+    series.forEach((p, i) => i === 0 ? ctx.moveTo(sx(i), sy(p.v)) : ctx.lineTo(sx(i), sy(p.v)));
+    const finalUp = vals[vals.length - 1] >= cash;
+    ctx.strokeStyle = finalUp ? '#22d38a' : '#ff5b6f'; ctx.lineWidth = 2; ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#8a95b0'; ctx.font = '10px JetBrains Mono, monospace';
+    ctx.fillText('₹' + Math.round(max).toLocaleString('en-IN'), 4, sy(max) + 4);
+    ctx.fillText('₹' + Math.round(min).toLocaleString('en-IN'), 4, sy(min) + 4);
+    ctx.fillText('start', 4, sy(cash) - 4);
+    ctx.fillText(series[0].t, padX, h - 4);
+    ctx.fillText(series[series.length - 1].t, w - padX - 60, h - 4);
+}
+</script>
+{% endblock %}
